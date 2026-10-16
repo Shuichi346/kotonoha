@@ -3,14 +3,13 @@
 import asyncio
 import contextlib
 import json
-import os
 import secrets
 from urllib.parse import urlencode
 
 import httpx
 from websockets.asyncio.client import connect
 
-from backend.config import ASR_DIR, ASR_PORT, CAPTURE, asr_ready, nemo_binary
+from backend.config import ASR_MODEL, ASR_PORT, CAPTURE, asr_ready, nemo_binary
 
 
 class CapturePermissionError(RuntimeError):
@@ -104,7 +103,7 @@ class NemoRuntime:
             binary,
             "serve",
             "--asr-model",
-            "nemotron-3.5",
+            ASR_MODEL,
             "--device",
             "metal",
             "--host",
@@ -119,7 +118,6 @@ class NemoRuntime:
             "600",
             "--max-upload-mb",
             "4096",
-            env={**os.environ, "NEMO_SPEECH_MODEL_DIR": str(ASR_DIR)},
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
         )

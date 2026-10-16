@@ -18,7 +18,9 @@ function walk(path) {
   }
 }
 roots.forEach(walk);
-for (const path of ['.venv/bin/python', `${process.env.HOME}/.local/bin/nemo-speech`]) {
+const nemo = execFileSync('.venv/bin/python', ['-c', 'from backend.config import nemo_binary; print(nemo_binary() or "")'], { encoding: 'utf8' }).trim();
+if (!nemo) throw new Error('Installed nemo-speech executable not found');
+for (const path of ['.venv/bin/python', nemo]) {
   const arches = execFileSync('/usr/bin/lipo', ['-archs', path], { encoding: 'utf8' }).trim();
   if (!arches.split(/\s+/).includes('arm64')) throw new Error(`arm64 unavailable: ${path}`);
   console.log(`${path}: ${arches}`);

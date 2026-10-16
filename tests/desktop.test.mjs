@@ -84,17 +84,30 @@ test('runtime staging is independent of the checkout and reuses only complete sn
   assert(!installed.root.startsWith(source));
   assert.equal(readFileSync(path.join(installed.root, 'backend/app.py'), 'utf8'), 'backend/app.py');
   assert(existsSync(path.join(installed.root, '.complete.json')));
-  assert(existsSync(path.join(installed.root, 'models/asr/model.gguf')));
-  assert(existsSync(path.join(installed.root, 'models/hy-mt2-1.8b-4bit/model.safetensors')));
-  assert(!existsSync(path.join(installed.root, 'models/translation')));
+  assert(!existsSync(path.join(installed.root, 'models')));
   assert.deepEqual(stageRuntime(source, path.join(dir, 'Application Support/runtime')), installed);
   writeFileSync(path.join(source, 'models/translation/old.safetensors'), 'unselected model changed');
   assert.deepEqual(stageRuntime(source, path.join(dir, 'Application Support/runtime')), installed);
   writeFileSync(path.join(source, 'models/hy-mt2-1.8b-4bit/model.safetensors'), 'selected model changed');
+  assert.deepEqual(stageRuntime(source, path.join(dir, 'Application Support/runtime')), installed);
+  writeFileSync(path.join(source, 'backend/app.py'), 'updated backend');
   assert.notEqual(stageRuntime(source, path.join(dir, 'Application Support/runtime')).revision, installed.revision);
   assert.throws(() => stageRuntime(source, path.join(source, 'runtime')), /outside the checkout/);
-  symlinkSync(path.join(source, 'models/asr/model.gguf'), path.join(source, 'models/asr/unsafe'));
+  symlinkSync(path.join(source, 'backend/app.py'), path.join(source, 'backend/unsafe'));
   assert.throws(() => stageRuntime(source, path.join(dir, 'other')), /depends on the checkout/);
+});
+
+test('runtime staging does not require a checkout model directory', async () => {
+  const { stageRuntime } = await import('../scripts/stage-runtime.mjs');
+  const { mkdirSync, symlinkSync, existsSync } = await import('node:fs');
+  const dir = mkdtempSync(path.join(tmpdir(), 'kotonoha-no-models-'));
+  const source = path.join(dir, 'source');
+  for (const name of ['backend', '.venv/bin', 'native/bin']) mkdirSync(path.join(source, name), { recursive: true });
+  for (const name of ['backend/app.py', '.venv/pyvenv.cfg', 'native/bin/audio-capture']) writeFileSync(path.join(source, name), name);
+  symlinkSync(process.execPath, path.join(source, '.venv/bin/python'));
+  const runtime = stageRuntime(source, path.join(dir, 'runtime'));
+  assert(existsSync(path.join(runtime.root, 'backend/app.py')));
+  assert(!existsSync(path.join(runtime.root, 'models')));
 });
 
 test('permission requests are single flight and start waits until the permission dialog settles', async () => {

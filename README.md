@@ -52,7 +52,7 @@ These screenshots show the app in use; they are examples, not accuracy or latenc
 
 ## Setup
 
-This repository provides a **local development app**. The packaged `.app` uses a runtime staged on the Mac where it was built; it is not a standalone signed and notarized installer for another Mac.
+Each user **clones this repository and builds on their own Mac**. The packaged `.app` uses that user's installed Python/NeMo, shared model caches, and locally staged runtime; copying another user's `.app` alone is not supported. This is not a standalone signed and notarized installer.
 
 ### Requirements
 
@@ -66,13 +66,42 @@ This repository provides a **local development app**. The packaged `.app` uses a
 | Speech runtime | arm64 `nemo-speech` CLI with Metal support; verified with 0.2.0 |
 | Model preparation | Internet access to download the speech and translation models |
 
-Install the speech CLI using the [NeMo-Speech.cpp installation guide](https://github.com/NVIDIA/NeMo-Speech.cpp/blob/main/docs/install.md). The app checks `PATH` and `~/.local/bin/nemo-speech`; set `NEMO_SPEECH_BIN` to an absolute executable path if it is installed elsewhere.
+### Prepare the tools once
+
+Install Git and the macOS SDK/Swift toolchain using Xcode or `xcode-select --install`. Install [Node.js](https://nodejs.org/en/download) **26.5 or later** with **npm 12.0.1 or later**, and [uv](https://docs.astral.sh/uv/getting-started/installation/). On a Mac with Homebrew, uv and Python can be prepared with:
+
+```sh
+brew install uv
+uv python install 3.13
+```
+
+Install the Metal-enabled arm64 CLI using the [official NeMo-Speech.cpp installer](https://github.com/NVIDIA/NeMo-Speech.cpp/blob/main/docs/install.md), unless it is already installed:
+
+```sh
+curl -fsSL https://github.com/NVIDIA/NeMo-Speech.cpp/raw/main/scripts/install.sh | sh
+```
+
+Open a new terminal, then check the tools:
+
+```sh
+git --version
+xcrun swift --version
+node --version
+npm --version
+uv --version
+nemo-speech --version
+nemo-speech doctor
+```
+
+Confirm an arm64 installation and Metal support. NeMo 0.2.0 is the tested version. The app reuses the installed CLI, checking `PATH` and then `~/.local/bin/nemo-speech`; it does not build or bundle another copy. For a nonstandard installation, set `NEMO_SPEECH_BIN` to its absolute executable path. Source builds must also provide the model index via `NEMO_SPEECH_MODEL_INDEX` if it is not at `<resolved executable prefix>/share/nemo-speech/model-index.json`.
 
 ### Install and launch
 
-From the repository root, run:
+Copy this repository's clone URL from GitHub's **Code** menu. Replace `REPOSITORY_URL` below with that URL:
 
 ```sh
+git clone REPOSITORY_URL Real-time-translation
+cd Real-time-translation
 npm ci
 npm run setup:electron
 uv sync --locked
@@ -83,7 +112,16 @@ npm start
 
 Use the committed `package-lock.json` and `uv.lock`. `npm start` checks frontend types, builds the interface, and launches Electron.
 
-Model preparation downloads the pinned [Hy-MT2-1.8B-4bit checkpoint](https://huggingface.co/mlx-community/Hy-MT2-1.8B-4bit) into `models/hy-mt2-1.8b-4bit` and the [Nemotron 3.5 speech model](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b) into `models/asr`. The checkpoint revision is recorded in [backend/config.py](backend/config.py). Model files are ignored by Git; refer to each model's linked card for its terms.
+`npm run prepare:models` prepares the shared caches below, reusing files already present. No manual model-path selection is needed. The two active models total approximately 1.7 GiB; allow additional space for dependencies and app builds. Refer to each model card for its terms.
+
+| Model | Default shared cache |
+| --- | --- |
+| [Hy-MT2-1.8B-4bit](https://huggingface.co/mlx-community/Hy-MT2-1.8B-4bit) | `~/.cache/huggingface/hub` |
+| [Nemotron 3.5 ASR](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b), managed by NeMo | `~/Library/Caches/NeMoSpeech/models` |
+
+The translator uses the exact revision pinned in [backend/config.py](backend/config.py), not whichever revision is newest in the cache. NeMo selects `nemotron-3.5` from its installed model index. The app honors `HF_HOME` / `HF_HUB_CACHE` and `NEMO_SPEECH_MODEL_DIR` in its launch environment; use the defaults for Finder launches, which do not inherit shell configuration. Preparation and launch must use the same settings. See the [Hugging Face cache guide](https://huggingface.co/docs/huggingface_hub/guides/manage-cache) and [NeMo cache guide](https://github.com/NVIDIA/NeMo-Speech.cpp/blob/main/docs/cli.md#models-and-cache).
+
+Models are not copied into the checkout or packaged runtime. Existing `models/` folders and older runtime snapshots are preserved but are not used by new builds. Keep the shared cache files available; after removing them, rerun `npm run prepare:models`. Startup/status checks do not download models or load them into memory.
 
 Models load when translation first starts and stay warm between sessions. Once prepared, transcription and translation use local model files.
 
@@ -138,15 +176,15 @@ npm run package
 npm run check:architecture
 ```
 
-The build creates `release/kotonoha-darwin-arm64/kotonoha.app`. Open it in Finder after quitting any other kotonoha build.
+The build creates `release/kotonoha-darwin-arm64/kotonoha.app`. You may move this app into `/Applications` on the same Mac and open it in Finder after quitting any other kotonoha build.
 
-Packaging stages the Python environment, backend, active models, and native capture helper into versioned snapshots under:
+Packaging stages the Python environment, backend, and native capture helper into versioned snapshots under:
 
 ```text
 ~/Library/Application Support/kotonoha/runtime/
 ```
 
-`Contents/Resources/runtime.json` inside the app selects its snapshot. Packaged startup does not read dependencies from the source checkout. Keep the selected snapshot, the installed base Python, and the NeMo executable available on this Mac. Repackage after changing backend code, Python dependencies, models, or the native helper. Older snapshots and unused model folders are preserved; new snapshots include only the active ASR and Hy-MT2 models.
+`Contents/Resources/runtime.json` inside the app selects its snapshot. Packaged startup does not read dependencies from the source checkout. Keep the selected snapshot, installed base Python, NeMo executable and model index, and shared model caches available on this Mac, even after moving the `.app`. Repackage after changing backend code, Python dependencies, or the native helper. A changed translator revision also needs model preparation and repackaging. New snapshots contain no model weights; older snapshots and model folders remain untouched. Other users follow the clone/setup/build steps on their own Macs.
 
 ## Development
 

@@ -1,10 +1,9 @@
-"""Download the two requested models to this workspace (never during capture)."""
+"""Prepare shared model caches explicitly, never during capture."""
 
 import argparse
-import os
 import subprocess
 
-from backend.config import ASR_DIR, MODEL_DIR, MODEL_ID, MODEL_REVISION, nemo_binary
+from backend.config import ASR_DIR, ASR_MODEL, MODEL_DIR, MODEL_ID, MODEL_REVISION, nemo_binary
 
 
 def main():
@@ -17,7 +16,6 @@ def main():
         raise SystemExit(
             "nemo-speech が見つかりません。NeMo-Speech.cpp の arm64 CLI を導入してください。"
         )
-    os.environ.setdefault("HF_HOME", str(MODEL_DIR.parent / ".huggingface"))
     from huggingface_hub import snapshot_download
 
     print(f"Downloading {MODEL_ID} → {MODEL_DIR}", flush=True)
@@ -25,13 +23,11 @@ def main():
     snapshot_download(
         MODEL_ID,
         revision=MODEL_REVISION,
-        local_dir=str(MODEL_DIR),
         allow_patterns=["*.json", "*.jinja", "*.model", "*.safetensors", "README.md"],
     )
     print(f"Downloading Nemotron 3.5 → {ASR_DIR}", flush=True)
     subprocess.run(
-        [binary, "pull", "nemotron-3.5"],
-        env={**os.environ, "NEMO_SPEECH_MODEL_DIR": str(ASR_DIR)},
+        [binary, "pull", ASR_MODEL],
         check=True,
         timeout=1800,
     )

@@ -52,7 +52,7 @@ YouTubeやブラウザ、普段使っている動画プレーヤーでそのま�
 
 ## セットアップ
 
-このリポジトリが提供するのは**ローカル開発用アプリ**です。パッケージ化した`.app`はビルドしたMac上に用意されたランタイムを使用します。ほかのMac向けの署名・公証済みスタンドアロンインストーラーではありません。
+**各自のMacでこのリポジトリをcloneしてビルドする方式**です。作成した`.app`は、その利用者が導入したPython・NeMo、共有モデルキャッシュ、ローカルの実行環境を使います。他人が作った`.app`だけをコピーして使う方式には対応していません。署名・公証済みのスタンドアロンインストーラーではありません。
 
 ### 必要な環境
 
@@ -66,13 +66,42 @@ YouTubeやブラウザ、普段使っている動画プレーヤーでそのま�
 | 音声認識ランタイム | Metal対応のarm64版`nemo-speech` CLI。0.2.0で動作確認済み |
 | モデルの準備 | 音声認識・翻訳モデルのダウンロードに必要なインターネット接続 |
 
-[NeMo-Speech.cppのインストールガイド](https://github.com/NVIDIA/NeMo-Speech.cpp/blob/main/docs/install.md)に従って音声認識CLIをインストールしてください。アプリは`PATH`と`~/.local/bin/nemo-speech`を確認します。それ以外の場所にインストールした場合は、`NEMO_SPEECH_BIN`に実行ファイルの絶対パスを設定してください。
+### 事前準備（初回のみ）
+
+Xcodeまたは`xcode-select --install`でGitとmacOS SDK・Swiftツールチェーンを導入します。[Node.js](https://nodejs.org/en/download) **26.5以降**と**npm 12.0.1以降**、[uv](https://docs.astral.sh/uv/getting-started/installation/)も必要です。Homebrew導入済みなら、uvとPythonは次のように準備できます。
+
+```sh
+brew install uv
+uv python install 3.13
+```
+
+NeMo未導入の場合は、[公式インストーラー](https://github.com/NVIDIA/NeMo-Speech.cpp/blob/main/docs/install.md)でMetal対応のarm64版CLIを導入します。導入済みなら再インストールは不要です。
+
+```sh
+curl -fsSL https://github.com/NVIDIA/NeMo-Speech.cpp/raw/main/scripts/install.sh | sh
+```
+
+新しいターミナルを開き、次を確認してください。
+
+```sh
+git --version
+xcrun swift --version
+node --version
+npm --version
+uv --version
+nemo-speech --version
+nemo-speech doctor
+```
+
+arm64版であることとMetal対応を確認します。NeMoは0.2.0で動作確認済みです。アプリはインストール済みCLIを`PATH`、`~/.local/bin/nemo-speech`の順で探し、別のNeMoをビルド・同梱しません。標準以外の場所に導入した場合は`NEMO_SPEECH_BIN`に実行ファイルの絶対パスを指定できます。ソースから導入してモデル索引が`<実体の実行ファイルのprefix>/share/nemo-speech/model-index.json`にない場合は、`NEMO_SPEECH_MODEL_INDEX`にも索引の絶対パスを指定してください。
 
 ### インストールと起動
 
-リポジトリのルートで次を実行します。
+GitHubの**Code**メニューからこのリポジトリのclone URLをコピーし、次の`REPOSITORY_URL`を置き換えて実行します。
 
 ```sh
+git clone REPOSITORY_URL Real-time-translation
+cd Real-time-translation
 npm ci
 npm run setup:electron
 uv sync --locked
@@ -83,7 +112,16 @@ npm start
 
 コミット済みの`package-lock.json`と`uv.lock`を使用してください。`npm start`はフロントエンドの型を確認して画面をビルドし、Electronを起動します。
 
-モデル準備コマンドは、固定された[Hy-MT2-1.8B-4bit checkpoint](https://huggingface.co/mlx-community/Hy-MT2-1.8B-4bit)を`models/hy-mt2-1.8b-4bit`に、[Nemotron 3.5 speech model](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b)を`models/asr`にダウンロードします。チェックポイントのリビジョンは[backend/config.py](backend/config.py)に記録されています。モデルファイルはGitの対象外です。利用条件は各モデルのリンク先にあるモデルカードを確認してください。
+`npm run prepare:models`は次の共有キャッシュを準備し、保存済みファイルを再利用します。モデルのパスを手動指定する必要はありません。使用する2モデルは合計約1.7 GiBで、ほかに依存関係とアプリのビルド用の空き容量が必要です。利用条件は各モデルカードを確認してください。
+
+| モデル | 標準の共有キャッシュ |
+| --- | --- |
+| [Hy-MT2-1.8B-4bit](https://huggingface.co/mlx-community/Hy-MT2-1.8B-4bit) | `~/.cache/huggingface/hub` |
+| [Nemotron 3.5 ASR](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b)（NeMoが管理） | `~/Library/Caches/NeMoSpeech/models` |
+
+翻訳モデルはキャッシュ内の最新版ではなく、[backend/config.py](backend/config.py)に固定されたリビジョンを使います。NeMoはインストール済みのモデル索引から`nemotron-3.5`を選びます。起動環境で指定された`HF_HOME` / `HF_HUB_CACHE`と`NEMO_SPEECH_MODEL_DIR`にも対応しますが、Finder起動はシェル設定を引き継がないため標準の保存先を推奨します。準備と起動で同じキャッシュ設定を使ってください。[Hugging Faceの説明](https://huggingface.co/docs/huggingface_hub/guides/manage-cache)と[NeMoの説明](https://github.com/NVIDIA/NeMo-Speech.cpp/blob/main/docs/cli.md#models-and-cache)も参照できます。
+
+新しいビルドはモデルをチェックアウトやアプリの実行環境へコピーしません。従来の`models/`と古い実行環境スナップショットは削除せず残しますが、新しいビルドでは使用しません。共有キャッシュは残してください。削除した場合は`npm run prepare:models`で再準備します。通常起動と状態確認ではモデルのダウンロードやメモリへの読み込みを行いません。
 
 モデルは翻訳を初めて開始すると読み込まれ、セッション間もメモリ上に保持されます。準備後の文字起こしと翻訳にはローカルのモデルファイルを使用します。
 
@@ -138,15 +176,15 @@ npm run package
 npm run check:architecture
 ```
 
-ビルドによって`release/kotonoha-darwin-arm64/kotonoha.app`が作成されます。ほかのkotonohaビルドを終了してから、Finderで開いてください。
+ビルドによって`release/kotonoha-darwin-arm64/kotonoha.app`が作成されます。同じMac内なら`/Applications`へ移動して使えます。ほかのkotonohaビルドを終了してから、Finderで開いてください。
 
-パッケージ化では、Python環境、バックエンド、使用するモデル、ネイティブ音声取り込みヘルパーを、次の場所にあるバージョン別スナップショットに格納します。
+パッケージ化では、Python環境、バックエンド、ネイティブ音声取り込みヘルパーを、次の場所にあるバージョン別スナップショットに格納します。
 
 ```text
 ~/Library/Application Support/kotonoha/runtime/
 ```
 
-アプリ内の`Contents/Resources/runtime.json`が使用するスナップショットを選択します。パッケージ版の起動時にソースチェックアウト内の依存関係は読み込まれません。このMac上で、選択されたスナップショット、インストール済みのベースPython、NeMo実行ファイルを利用できる状態にしてください。バックエンドコード、Python依存関係、モデル、ネイティブヘルパーを変更した場合は再パッケージ化します。古いスナップショットと未使用モデルのフォルダーは保持されます。新しいスナップショットに含まれるのは、使用中のASRモデルとHy-MT2モデルだけです。
+アプリ内の`Contents/Resources/runtime.json`が使用するスナップショットを選択します。パッケージ版の起動時にソースチェックアウト内の依存関係は読み込まれません。`.app`を移動しても、選択されたスナップショット、インストール済みのベースPython、NeMo実行ファイルとモデル索引、共有モデルキャッシュは残してください。バックエンドコード、Python依存関係、ネイティブヘルパーを変更した場合は再パッケージ化します。翻訳モデルの固定リビジョンを変更した場合もモデル準備と再パッケージ化が必要です。新しいスナップショットにモデルの重みは含まれません。古いスナップショットとモデルは保持します。他の利用者も、それぞれのMacでclone・事前準備・ビルドを行ってください。
 
 ## 開発
 

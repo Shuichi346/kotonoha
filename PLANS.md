@@ -75,8 +75,24 @@ This is the single authoritative implementation and acceptance checklist. The or
 - [x] HYP1 — Create a separate arm64 app/runtime and verify its actual translator, archived model selection, architecture, and hidden startup.
 - [x] HYD1 — Update current operating documentation and durable model contracts with final evidence.
 
-Current: Complete — Hy-MT2 is active in the source and separately packaged app; required checks passed without capture.
+- [x] SC1 — Resolve the pinned translator from the shared Hugging Face cache and ASR from the installed NeMo cache; keep preparation explicit and readiness offline.
+- [x] SC2 — Exclude models from new runtime snapshots and document per-user clone/build prerequisites in both READMEs.
+- [x] SCV1 — Pass focused cache/preparation/staging regressions, backend/Ruff checks, desktop tests, and frontend build.
+- [x] SCP1 — Prepare the shared models, package separately, and verify shared model inference, arm64 support, and hidden startup without capture.
+- [x] SCD1 — Record final evidence and update durable project guidance.
+
+Current: Complete — shared per-user caches and installed NeMo are active in the source and `release/shared-cache/kotonoha-darwin-arm64/kotonoha.app`. Each user clones and builds locally. Existing models, snapshots, and app artifacts were preserved.
 Next: None.
+
+## Shared-cache Migration — 2026-10-16
+
+The working tree was clean before this change. Installed NeMo 0.2.0 already had the expected Nemotron GGUF in its default cache; the pinned translator was absent from the shared HF cache. Explicit model preparation populated that cache and reused NeMo's existing artifact. No dependencies or lockfiles changed. Runtime staging now includes only backend, `.venv`, and native helpers, with a new fingerprint version. The READMEs document tool installation, clone/setup/build, cache reuse and overrides, Finder environment limits, and the local-only distribution boundary.
+
+SCV1: 84 backend tests and thirteen desktop tests passed on execution 1. Frontend types/build passed on execution 1. Ruff initially found two long configuration lines; formatting repaired them, then lint/format passed on execution 2. Unchanged UI/native mechanics reuse prior acceptance rather than repeating capture-related checks. A read-only independent review found no blocking correctness issue.
+
+SCP1: model preparation and separate packaging passed on execution 1. The app selects `/Users/shuichi/Library/Application Support/kotonoha/runtime/1c6dcce2a36919f3`, containing no model directory. Source/config/runtime/translator bytes match the staged code. Icon inspection initially assumed the wrong resource basename; reading `CFBundleIconFile` confirmed the packaged `electron.icns` bytes match the tracked icon on inspection 2; no app change was needed. Architecture inspection passed for 33 Mach-O components plus Python/NeMo. The actual staged interpreter and translator loaded the shared pinned snapshot and passed four text directions (English/Japanese and Chinese/Korean), preserving EOS and output bounds. The fixture-only NeMo endpoint check passed execution 1, emitting `And so my fellow Americans` at audio time 3.30 seconds before a client commit, in 11.09 seconds overall. The former local WAV was absent, so the public NVIDIA JFK fixture was fetched into ignored scratch space. No system capture was started.
+
+The hidden desktop smoke passed execution 1 on a copy relocated to `/private/tmp/kotonoha-shared-cache-moved-20261016.app`: authenticated backend, both models ready, two windows, preserved input/layout behavior, and zero renderer errors. This verifies app-location independence on this Mac; `/Applications` was not modified. Recording permission was only checked, never requested, and no real system audio was captured. Known nonfatal Transformers RoPE and FastAPI/httpx deprecation warnings remain unchanged. Documentation links/commands and whitespace were reviewed; the repository has no configured remote URL, so both READMEs explicitly ask readers to substitute the clone URL from GitHub's Code menu.
 
 ## Hy-MT2 Application Migration — 2026-10-16
 
@@ -126,16 +142,16 @@ Explicit requirements are Mac system-output input, translated subtitle output, H
 
 Target Apple silicon only: macOS 26+, arm64 execution, no Intel builds, universal app distributions, Rosetta workflows, or Intel compatibility testing. Use native arm64-compatible runtimes and helpers. A dependency requiring Intel execution is a blocker.
 
-The delivered app is a local development build with its Python environment and selected models staged in Application Support, independent of the Documents checkout at startup. A portable installer, Developer ID distribution, notarization, video embedding, microphone transcription, cloud services, and automatic recording are outside this implementation. No numerical audio-latency or general translation-quality guarantee was established. The user reported on 2026-10-16 that the current app runs comfortably; preserve that working behavior while applying requested changes.
+The delivered app is a local development build with its Python environment/backend/native helpers staged in Application Support and models in shared per-user caches, independent of the Documents checkout at startup. A portable installer, Developer ID distribution, notarization, video embedding, microphone transcription, cloud services, and automatic recording are outside this implementation. No numerical audio-latency or general translation-quality guarantee was established. The user reported on 2026-10-16 that the current app runs comfortably; preserve that working behavior while applying requested changes.
 
 ## Existing System and Evidence
 
 - Repository root: `/Users/shuichi/Documents/GitHub/Real-time-translation`.
-- Current app artifact: `release/hy-mt2/kotonoha-darwin-arm64/kotonoha.app`; ordinary packaging defaults to `release/kotonoha-darwin-arm64/kotonoha.app`.
+- Current app artifact: `release/shared-cache/kotonoha-darwin-arm64/kotonoha.app`; ordinary packaging defaults to `release/kotonoha-darwin-arm64/kotonoha.app`.
 - Node.js 26.10.0 and npm 12.2.0 were observed during implementation. The manifest requires Node.js >=26.5 and npm >=12.0.1, with project-local engine enforcement.
 - Python 3.13.11 is managed by uv in `.venv`; `pyproject.toml`, `.python-version`, and `uv.lock` define the Python environment.
 - The implementation uses Electron 44.7.2, React 19.3.1, Vite 8.3.4, TypeScript 7.0.2, and Playwright 1.64.1. The Python evidence records mlx-lm 0.32.1 and MLX 0.32.4. The installed arm64 NeMo CLI is 0.2.0.
-- Active models are in ignored `models/hy-mt2-1.8b-4bit` and `models/asr`, approximately 1.7 GiB combined. The old `models/translation` is retained but excluded from new runtime snapshots. Dependency trees, builds, native binaries, and scratch data remain ignored.
+- Active models are in the shared Hugging Face Hub and NeMo caches, approximately 1.7 GiB combined. Prior workspace model directories are retained but excluded from new runtime snapshots. Dependency trees, builds, native binaries, and scratch data remain ignored.
 - Existing evidence is available in this session, NOTES.md, backend/README.md, and native/README.md. Reuse valid evidence; do not rerun checks to populate this plan.
 - The user's comfort report is user-reported operational evidence. It does not specify a player, language pair, measured latency, or exhaustive interaction coverage. The agent has not captured the user's live system audio or performed an AI-operated visual inspection.
 
@@ -161,7 +177,7 @@ Use the narrow bridge in `desktop/preload.cjs` with context isolation and render
 
 Start windows from `app.whenReady().then(...)`; do not block main-module evaluation on a top-level readiness wait. Launch Python in an owned process group. Quit requests graceful shutdown, then kills that group after the bounded grace period to avoid orphaned model or capture processes.
 
-`scripts/package.mjs` packages darwin arm64 and stages `.venv`, backend, native helper, and models through `scripts/stage-runtime.mjs` into a versioned Application Support snapshot. It writes that root to `Contents/Resources/runtime.json`. Packaged startup must not depend on the Documents checkout. The installed base Python and NeMo executable are still required; packaging does not create a self-contained distribution.
+`scripts/package.mjs` packages darwin arm64 and stages `.venv`, backend, and native helper through `scripts/stage-runtime.mjs` into a versioned Application Support snapshot. It writes that root to `Contents/Resources/runtime.json`. Packaged startup must not depend on the Documents checkout. The installed base Python and NeMo executable are still required; packaging does not create a self-contained distribution.
 
 ### Source references
 

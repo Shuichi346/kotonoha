@@ -14,6 +14,8 @@
 
 ### Changed
 
+- Switched model preparation and loading to per-user shared Hugging Face/NeMo caches, reused the installed NeMo CLI, and removed model copies from new runtime snapshots while preserving existing files.
+- Documented per-user clone/build prerequisites, tool installation, shared-cache behavior, and moving a locally built app into Applications in both READMEs.
 - Replaced TranslateGemma 4B with the pinned Hy-MT2 1.8B MLX 4bit model, its native translation prompt/EOS, recommended sampling settings, and a 512-token subtitle cap with localized overflow errors.
 - Updated model readiness labels and preparation, and limited new runtime snapshots to the selected translator and ASR model while retaining previous models and app builds.
 - Reduced the initial controller to at most 480×640 and placed it in a separate band above subtitles, adapting to the display work area.

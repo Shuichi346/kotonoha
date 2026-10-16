@@ -12,8 +12,8 @@ export function stageRuntime(sourceRoot, runtimeBase = path.join(homedir(), 'Lib
   const base = path.join(realpathSync(ancestor), ...suffix);
   if (base === source || base.startsWith(source + path.sep)) throw new Error('Runtime must be outside the checkout');
   const hash = createHash('sha256');
-  const entries = ['backend', '.venv', 'models/asr', 'models/hy-mt2-1.8b-4bit', 'native/bin'];
-  hash.update(`runtime-v2:${entries.join(',')}\n`);
+  const entries = ['backend', '.venv', 'native/bin'];
+  hash.update(`runtime-v3-shared-cache:${entries.join(',')}\n`);
   function fingerprint(relative) {
     const full = path.join(source, relative);
     const info = lstatSync(full);

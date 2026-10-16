@@ -36,7 +36,9 @@ def test_prompt_uses_full_target_name_and_keeps_source_text(target, name):
 
 def test_model_selection_and_language_contract():
     assert MODEL_ID == "mlx-community/Hy-MT2-1.8B-4bit"
-    assert MODEL_DIR.name == "hy-mt2-1.8b-4bit"
+    assert MODEL_DIR.name == MODEL_REVISION
+    assert MODEL_DIR.parent.name == "snapshots"
+    assert MODEL_DIR.parent.parent.name == "models--mlx-community--Hy-MT2-1.8B-4bit"
     assert MODEL_REVISION == "e5c6fe56c7b3bc77fae5ae92db31f2178f1e6912"
     assert TARGETS <= LANGUAGE_NAMES.keys()
     with pytest.raises(ValueError, match="対応していない"):
