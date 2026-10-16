@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { readdirSync, statSync } from 'node:fs';
-const roots = ['release/kotonoha-darwin-arm64/kotonoha.app', 'native/bin', '.venv/lib/python3.13/site-packages/mlx'];
+const roots = [process.env.KOTONOHA_CHECK_APP || 'release/kotonoha-darwin-arm64/kotonoha.app', 'native/bin', '.venv/lib/python3.13/site-packages/mlx'];
 let checked = 0;
 function walk(path) {
   for (const name of readdirSync(path)) {

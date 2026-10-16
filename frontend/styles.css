@@ -89,3 +89,26 @@ footer { display: flex; justify-content: center; align-items: center; gap: 8px; 
 
 .interface-language { display: flex; align-items: center; justify-content: flex-end; gap: 10px; color: var(--muted); font-size: 11px; margin: 0 0 19px; }
 .interface-language select { width: 112px; padding: 7px 9px; font-size: 11px; }
+.permission-notice { background: #f0f4ff; border: 1px solid #dce4ff; border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; font-size: 12px; line-height: 1.7; }
+.permission-notice strong { display: block; font-weight: 550; }
+.permission-notice button { padding: 5px 0 0; color: var(--blue); font-size: 11px; }
+.permission-dialog { width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 84px); margin: auto; border: 1px solid #e0e4ee; border-radius: 18px; padding: 24px; color: #242935; box-shadow: 0 20px 70px #17213b33; overflow-y: auto; -webkit-app-region: no-drag; }
+.permission-dialog::backdrop { background: #202b4559; }
+.permission-heading { display: flex; align-items: center; gap: 11px; }
+.permission-heading h2 { color: #171b25; font-size: 20px; font-weight: 700; line-height: 1.4; }
+.permission-icon { display: inline-flex; align-items: center; justify-content: center; background: #edf1ff; color: var(--blue); border-radius: 11px; width: 40px; height: 40px; flex-shrink: 0; }
+.permission-icon svg { width: 20px; height: 20px; }
+.permission-intro { font-size: 13px; line-height: 1.8; margin: 16px 0; }
+.permission-steps { list-style: none; counter-reset: permission-step; padding: 0; margin: 20px 0; }
+.permission-steps li { counter-increment: permission-step; position: relative; padding-left: 34px; margin: 0 0 17px; }
+.permission-steps li::before { content: counter(permission-step); position: absolute; left: 0; top: 0; width: 23px; height: 23px; border-radius: 50%; background: #edf1ff; color: #345af0; text-align: center; line-height: 23px; font-size: 12px; font-weight: 650; }
+.permission-steps strong { font-size: 13px; font-weight: 650; line-height: 1.8; }
+.permission-steps p { margin: 4px 0 0; font-size: 12px; color: #697180; line-height: 1.8; }
+.permission-privacy { background: #f6f7fa; padding: 11px 13px; border-radius: 9px; font-size: 11px; line-height: 1.8; color: #697180; }
+.permission-feedback { font-size: 12px; line-height: 1.8; color: #80551f; margin: 14px 0; }
+.permission-feedback:empty { display: none; }
+.permission-feedback.granted { color: #21734c; }
+.permission-restart, .permission-next { font-size: 11px; color: #697180; line-height: 1.8; margin: 0 0 15px; }
+.permission-dialog > .primary { width: 100%; min-height: 46px; margin-top: 4px; }
+.permission-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-top: 12px; }
+.permission-later { color: #697180; font-size: 11px; padding: 9px; }

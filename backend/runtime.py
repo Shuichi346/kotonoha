@@ -13,6 +13,57 @@ from websockets.asyncio.client import connect
 from backend.config import ASR_DIR, ASR_PORT, CAPTURE, asr_ready, nemo_binary
 
 
+class CapturePermissionError(RuntimeError):
+    code = "capture_permission_required"
+
+    def __init__(self):
+        super().__init__(
+            "システム音声の許可がまだ確認できません。設定で kotonoha を許可したあと、"
+            "「許可を確認」を押してください。"
+            "オンでも確認できない場合は kotonoha を再起動してください。"
+        )
+
+
+async def capture_permission(*, request: bool = False):
+    """Check/request authorization without starting capture or loading any model."""
+    if not CAPTURE.is_file():
+        return {"ready": False, "detail": "npm run build:native を実行してください。"}
+    process = None
+    try:
+        process = await asyncio.create_subprocess_exec(
+            str(CAPTURE),
+            "--request-permission" if request else "--check",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        output, _ = await asyncio.wait_for(process.communicate(), timeout=60 if request else 5)
+        if process.returncode != 0:
+            raise ValueError("Permission helper failed")
+        result = json.loads(output)
+        if not isinstance(result, dict) or result.get("permission") not in {"granted", "required"}:
+            raise ValueError("Invalid permission status")
+        ready = result.get("available") is True and result["permission"] == "granted"
+        return {
+            "ready": ready,
+            "permission": result["permission"],
+            "detail": "ScreenCaptureKit · 16 kHz PCM"
+            if ready
+            else "翻訳を始める前に、システム音声の許可を設定してください。",
+        }
+    except (OSError, ValueError, TimeoutError):
+        return {
+            "ready": False,
+            "permission": "unknown",
+            "detail": "音声の許可を確認できません。macOS のダイアログを閉じて、"
+            "もう一度確認してください。",
+        }
+    finally:
+        if process and process.returncode is None:
+            with contextlib.suppress(ProcessLookupError):
+                process.kill()
+            await process.wait()
+
+
 async def terminate(process: asyncio.subprocess.Process | None):
     if process is None or process.returncode is not None:
         return
@@ -33,6 +84,13 @@ class NemoRuntime:
         self.key = secrets.token_urlsafe(32)
         self._log_task = None
         self.last_error = ""
+
+    async def check_capture_permission(self):
+        result = await capture_permission()
+        if result.get("permission") == "required":
+            raise CapturePermissionError()
+        if not result["ready"]:
+            raise RuntimeError(result["detail"])
 
     async def ensure(self):
         if self.process is not None and self.process.returncode is None:

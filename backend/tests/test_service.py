@@ -58,6 +58,9 @@ class FakeRuntime:
         self.process.stderr = None
         self.stopped = False
 
+    async def check_capture_permission(self):
+        pass
+
     async def ensure(self):
         pass
 
@@ -245,3 +248,143 @@ def test_locale_events_never_translate_transcript_or_subtitle_content():
     for kind in ["subtitle", "partial"]:
         event = {"type": kind, "text": "翻訳済みの字幕", "source": "Original words"}
         assert localize_event(event, "en") == event
+
+
+def test_permission_request_requires_auth_and_never_starts_translation(monkeypatch):
+    permission = AsyncMock(
+        return_value={
+            "ready": False,
+            "permission": "required",
+            "detail": "翻訳を始める前に、システム音声の許可を設定してください。",
+        }
+    )
+    monkeypatch.setattr("backend.app.capture_permission", permission)
+    translator = FakeTranslator()
+    translator.load = AsyncMock()
+    runtime = FakeRuntime()
+    runtime.capture = AsyncMock()
+    manager = SessionManager(runtime, translator)
+    with TestClient(create_app("secret", manager)) as client:
+        for headers in [{}, {"Authorization": "Bearer wrong"}]:
+            assert client.post("/api/capture/permission", headers=headers).status_code == 401
+        permission.assert_not_called()
+        result = client.post(
+            "/api/capture/permission",
+            headers={"Authorization": "Bearer secret", "Accept-Language": "en"},
+        )
+        assert result.status_code == 200
+        assert result.json() == {
+            "ready": False,
+            "permission": "required",
+            "detail": "Set up system audio permission before starting translation.",
+        }
+        permission.assert_awaited_once_with(request=True)
+        assert manager.session is None
+        translator.load.assert_not_awaited()
+        runtime.capture.assert_not_awaited()
+
+
+@pytest.mark.parametrize("should_request", [False, True])
+async def test_permission_helper_uses_only_explicit_permission_commands(
+    monkeypatch, tmp_path, should_request
+):
+    from types import SimpleNamespace
+
+    from backend.runtime import capture_permission
+
+    helper = tmp_path / "audio-capture"
+    helper.touch()
+    monkeypatch.setattr("backend.runtime.CAPTURE", helper)
+    process = SimpleNamespace(
+        returncode=0,
+        communicate=AsyncMock(return_value=(b'{"available":true,"permission":"granted"}', b"")),
+    )
+    spawn = AsyncMock(return_value=process)
+    monkeypatch.setattr("backend.runtime.asyncio.create_subprocess_exec", spawn)
+    result = await capture_permission(request=should_request)
+    assert result["permission"] == "granted" and result["ready"]
+    assert spawn.call_args.args == (
+        str(helper),
+        "--request-permission" if should_request else "--check",
+    )
+
+
+async def test_permission_timeout_reaps_helper_and_returns_recoverable_status(
+    monkeypatch, tmp_path
+):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from backend.runtime import capture_permission
+
+    helper = tmp_path / "audio-capture"
+    helper.touch()
+    monkeypatch.setattr("backend.runtime.CAPTURE", helper)
+    process = SimpleNamespace(
+        returncode=None,
+        communicate=AsyncMock(return_value=(b"", b"")),
+        kill=Mock(),
+        wait=AsyncMock(),
+    )
+    monkeypatch.setattr(
+        "backend.runtime.asyncio.create_subprocess_exec", AsyncMock(return_value=process)
+    )
+
+    # Mirror asyncio.wait_for's signature so this fake can verify its timeout.
+    async def expire(awaitable, timeout):  # noqa: ASYNC109
+        assert timeout == 60
+        await awaitable
+        raise TimeoutError
+
+    monkeypatch.setattr("backend.runtime.asyncio.wait_for", expire)
+    result = await capture_permission(request=True)
+    assert result["permission"] == "unknown" and not result["ready"]
+    process.kill.assert_called_once()
+    process.wait.assert_awaited_once()
+
+
+async def test_missing_permission_is_reported_before_models_or_capture_start():
+    from backend.messages import localize_event
+    from backend.runtime import CapturePermissionError
+
+    events = []
+    runtime = FakeRuntime()
+    runtime.check_capture_permission = AsyncMock(side_effect=CapturePermissionError())
+    runtime.ensure = AsyncMock()
+    runtime.capture = AsyncMock()
+    translator = FakeTranslator()
+    translator.load = AsyncMock()
+    session = LiveSession(runtime, translator, AsyncMock(side_effect=events.append), "en", "ja")
+    await session.run()
+    error = events[0]
+    assert error["type"] == "error" and error["code"] == "capture_permission_required"
+    assert "許可を確認" in error["message"]
+    assert "Check permission" in localize_event(error, "en")["message"]
+    assert events[-1] == {"type": "status", "state": "stopped"}
+    translator.load.assert_not_awaited()
+    runtime.ensure.assert_not_awaited()
+    runtime.capture.assert_not_awaited()
+
+
+async def test_capture_permission_revoked_after_preflight_has_structured_error():
+    events = []
+    runtime = FakeRuntime()
+
+    async def denied_capture():
+        runtime.process.stdout = asyncio.StreamReader()
+        runtime.process.stderr = asyncio.StreamReader()
+        runtime.process.stdout.feed_eof()
+        runtime.process.stderr.feed_data(b"audio-capture: capture_permission_required\n")
+        runtime.process.stderr.feed_eof()
+        return runtime.process
+
+    runtime.capture = denied_capture
+    runtime.stop_capture = AsyncMock()
+    session = LiveSession(
+        runtime, FakeTranslator(), AsyncMock(side_effect=events.append), "en", "ja"
+    )
+    await asyncio.wait_for(session.run(), 2)
+    error = next(event for event in events if event["type"] == "error")
+    assert error["code"] == "capture_permission_required"
+    assert "audio-capture:" not in error["message"]
+    assert events[-1]["state"] == "stopped"

@@ -24,14 +24,17 @@ try {
   const result = await controller.evaluate(async () => {
     const before = await window.kotonoha.snapshot();
     const status = await window.kotonoha.status();
+    const permissionBridge = [typeof window.kotonoha.requestCapturePermission, typeof window.kotonoha.openCaptureSettings];
     await window.kotonoha.settings({ ...before.settings, uiLanguage: 'en' });
     await window.kotonoha.lock(false);
     await window.kotonoha.lock(true);
     await window.kotonoha.overlay(false);
     const after = await window.kotonoha.snapshot();
-    return { before, status, after };
+    return { before, status, after, permissionBridge };
   });
   assert.equal(result.before.state, 'stopped');
+  assert.deepEqual(result.permissionBridge, ['function', 'function']);
+  assert.equal(result.after.state, 'stopped');
   assert.equal(result.before.settings.uiLanguage, 'ja');
   assert.equal(result.before.visible, false);
   assert.equal(result.before.locked, true);

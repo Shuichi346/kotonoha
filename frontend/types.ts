@@ -1,13 +1,15 @@
 export type Settings = { source: string; target: string; uiLanguage: 'ja' | 'en'; fontSize: number; showOriginal: boolean; background: number; expiry: number };
 export type SessionState = 'starting' | 'listening' | 'stopping' | 'stopped';
 export type Subtitle = { type: 'subtitle'; id: string; source: string; text: string; start: number; end: number; latency_ms: number; receivedAt: number };
-export type ModelStatus = { ready: boolean; detail: string };
+export type ModelStatus = { ready: boolean; detail: string; permission?: 'granted' | 'required' | 'unknown' };
 export type Readiness = { capture: ModelStatus; asr: ModelStatus; translation: ModelStatus };
-export type LiveEvent = Subtitle | { type: 'status'; state: SessionState; message?: string } | { type: 'partial'; text: string } | { type: 'level'; value: number } | { type: 'error'; message: string } | { type: 'settings'; settings: Settings } | { type: 'overlay'; visible: boolean; locked: boolean } | { type: 'clear' };
+export type LiveEvent = Subtitle | { type: 'status'; state: SessionState; message?: string } | { type: 'partial'; text: string } | { type: 'level'; value: number } | { type: 'error'; message: string; code?: string } | { type: 'settings'; settings: Settings } | { type: 'overlay'; visible: boolean; locked: boolean } | { type: 'clear' };
 export type Snapshot = { settings: Settings; state: SessionState; latest: Subtitle | null; history: Subtitle[]; visible: boolean; locked: boolean };
 export interface Bridge {
   snapshot(): Promise<Snapshot>;
   status(): Promise<Readiness>;
+  requestCapturePermission(): Promise<ModelStatus>;
+  openCaptureSettings(): Promise<void>;
   settings(value: Settings): Promise<Settings>;
   start(): Promise<void>;
   stop(): Promise<void>;

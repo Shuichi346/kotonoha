@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, globalShortcut, screen, dialog, powerSaveBlocker } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, globalShortcut, screen, dialog, powerSaveBlocker, shell } from 'electron';
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { defaultSettings, validatedSettings, loadSettings } from './preferences.mjs';
 import { desktopLabels } from './locale.mjs';
 import { windowAvailable, showController, releaseOverlay, setOverlayInput } from './window-actions.mjs';
+import { createCaptureActions } from './capture-actions.mjs';
 
 app.setName('kotonoha');
 if (process.env.KOTONOHA_TEST_PROFILE) app.setPath('userData', process.env.KOTONOHA_TEST_PROFILE);
@@ -112,6 +113,34 @@ async function waitForBackend() {
   throw new Error(backendError || text().pythonStartup);
 }
 const ready = { promise: null };
+const captureActions = createCaptureActions({
+  requestPermission: async () => {
+    await ready.promise;
+    // Active capture already has access; a second permission request must not interrupt it.
+    const active = state !== 'stopped';
+    const response = await fetch(`${base}${active ? '/api/status' : '/api/capture/permission'}`, {
+      method: active ? 'GET' : 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Accept-Language': settings.uiLanguage },
+      signal: AbortSignal.timeout(70000),
+    });
+    if (!response.ok) throw new Error(`${text().readiness} (${response.status})`);
+    const result = await response.json();
+    return active ? result.capture : result;
+  },
+  start: async () => {
+    if (quitting || state !== 'stopped') return;
+    await connect();
+    if (quitting || state !== 'stopped') return;
+    setLocked(true); setOverlay(false); latest = null; broadcast({ type: 'clear' });
+    statusEvent({ type: 'status', state: 'starting' });
+    try {
+      socket.send(JSON.stringify({ type: 'start', source: settings.source, target: settings.target, ui_language: settings.uiLanguage }));
+    } catch (error) {
+      statusEvent({ type: 'status', state: 'stopped' });
+      throw error;
+    }
+  },
+});
 async function connect() {
   await ready.promise;
   if (socket?.readyState === WebSocket.OPEN) return;
@@ -177,7 +206,9 @@ else {
       if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'ui_language', ui_language: settings.uiLanguage }));
       return settings;
     });
-    handle('app:start', async () => { await connect(); setLocked(true); setOverlay(false); latest = null; broadcast({ type: 'clear' }); socket.send(JSON.stringify({ type: 'start', source: settings.source, target: settings.target, ui_language: settings.uiLanguage })); });
+    handle('app:capture-permission', captureActions.requestPermission);
+    handle('app:capture-settings', () => shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'));
+    handle('app:start', captureActions.start);
     handle('app:stop', () => { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'stop' })); });
     handle('app:overlay', (value) => setOverlay(!!value));
     handle('app:lock', (value) => setLocked(value));

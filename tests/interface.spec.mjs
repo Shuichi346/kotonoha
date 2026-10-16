@@ -1,15 +1,30 @@
 import { test, expect } from '@playwright/test';
 import { formatTranscript } from '../desktop/transcript.mjs';
 const subtitle = { type: 'subtitle', id: 'test-1', source: 'A bridge between languages.', text: '言葉と言葉をつなぐ架け橋。', start: 0, end: 3, latency_ms: 100 };
-async function bridge(page, initialLatest = null) {
-  await page.addInitScript(({ initialLatest }) => {
+async function bridge(page, initialLatest = null, options = {}) {
+  await page.addInitScript(({ initialLatest, options }) => {
     const listeners = new Set();
     const settings = { source: 'en', target: 'ja', fontSize: 40, showOriginal: true, background: 0, expiry: 12 };
     window.testCalls = [];
+    window.testPermission = options.permission || 'granted';
+    window.testStatusFailure = false;
+    window.testRequestFailure = false;
+    window.testResolvePermission = null;
     window.testEmit = (event) => listeners.forEach((fn) => fn(event));
     window.kotonoha = {
       snapshot: async () => ({ settings, state: 'stopped', latest: initialLatest, history: [], visible: true, locked: false }),
-      status: async () => ({ capture: { ready: false, detail: 'macOS permission required' }, asr: { ready: true, detail: 'Ready' }, translation: { ready: true, detail: 'Ready' } }),
+      status: async () => {
+        if (window.testStatusFailure) throw new Error('backend unavailable');
+        return { capture: { ready: window.testPermission === 'granted', permission: window.testPermission, detail: 'Permission status' }, asr: { ready: true, detail: 'Ready' }, translation: { ready: true, detail: 'Ready' } };
+      },
+      requestCapturePermission: async () => {
+        window.testCalls.push('permission');
+        if (options.deferPermission) await new Promise((resolve) => { window.testResolvePermission = resolve; });
+        if (window.testRequestFailure) throw new Error('native helper error');
+        window.testPermission = options.requestResult || 'required';
+        return { ready: window.testPermission === 'granted', permission: window.testPermission, detail: 'Permission status' };
+      },
+      openCaptureSettings: async () => { window.testCalls.push('settings'); },
       settings: async (value) => { Object.assign(settings, value); window.testEmit({ type: 'settings', settings: value }); return value; },
       start: async () => { window.testCalls.push('start'); window.testEmit({ type: 'status', state: 'listening' }); },
       stop: async () => { window.testCalls.push('stop'); window.testEmit({ type: 'status', state: 'stopped' }); },
@@ -20,7 +35,7 @@ async function bridge(page, initialLatest = null) {
       export: async (format) => { window.testCalls.push(`export:${format}`); return true; },
       subscribe: (callback) => { listeners.add(callback); return () => listeners.delete(callback); }
     };
-  }, { initialLatest });
+  }, { initialLatest, options });
 }
 
 test('start/stop, language settings, and independent subtitle controls', async ({ page }) => {
@@ -118,4 +133,107 @@ test('subtitle toolbar follows interface language while retaining subtitle conte
   await expect(page.getByText(subtitle.text, { exact: true })).toBeVisible();
   await expect(page.locator('.overlay-controls button').first().locator('circle')).toHaveCount(0);
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
+});
+
+
+test('first permission guide separates explanation, OS approval, verification, and explicit start', async ({ page }) => {
+  await page.setViewportSize({ width: 510, height: 850 });
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => { if (['error', 'warning'].includes(message.type())) errors.push(message.text()); });
+  await bridge(page, null, { permission: 'required' });
+  await page.goto('/');
+  await expect(page).toHaveTitle('kotonoha — ライブ字幕翻訳');
+  const guide = page.getByRole('dialog', { name: '翻訳を始める前に' });
+  await expect(guide).toBeVisible();
+  await expect(guide.getByRole('listitem')).toHaveCount(3);
+  await page.keyboard.press('Tab');
+  expect(await page.evaluate(() => !!document.activeElement.closest('dialog'))).toBe(true);
+  await expect(guide).toContainText('この操作では翻訳は始まりません');
+  expect(await page.evaluate(() => window.testCalls)).toEqual([]);
+  await page.screenshot({ path: '/private/tmp/kotonoha-permission-guide.png' });
+  await guide.getByRole('button', { name: '許可画面へ進む', exact: true }).click();
+  await expect(guide).toContainText('許可を確認できていません');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  expect(await page.evaluate(() => window.testCalls)).toEqual(['permission']);
+  await guide.getByRole('button', { name: 'システム設定を開く', exact: true }).click();
+  await page.evaluate(() => { window.testPermission = 'granted'; });
+  await guide.getByRole('button', { name: '許可状況を確認', exact: true }).click();
+  await expect(guide).toContainText('システム音声へのアクセスを確認できました');
+  expect(await page.evaluate(() => window.testCalls)).toEqual(['permission', 'settings']);
+  await guide.getByRole('button', { name: '閉じて翻訳へ', exact: true }).click();
+  await expect(guide).not.toBeVisible();
+  await page.getByRole('button', { name: '翻訳を開始', exact: true }).click();
+  await expect(page.getByRole('button', { name: '翻訳を停止', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => window.testCalls)).toEqual(['permission', 'settings', 'start']);
+  expect(errors).toEqual([]);
+});
+
+test('deferred or declined permission cannot trigger startup or duplicate prompts; guide remains accessible', async ({ page }) => {
+  await page.setViewportSize({ width: 450, height: 680 });
+  await bridge(page, null, { permission: 'required', deferPermission: true });
+  await page.goto('/');
+  const guide = page.getByRole('dialog');
+  await expect(guide).toBeVisible();
+  await guide.getByRole('button', { name: '許可画面へ進む', exact: true }).click();
+  await expect(guide.getByRole('button', { name: 'macOSの許可画面で操作してください…', exact: true })).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await expect(guide).toBeVisible();
+  expect(await page.evaluate(() => window.testCalls)).toEqual(['permission']);
+  await page.evaluate(() => window.testResolvePermission());
+  await expect(guide.getByRole('button', { name: '許可状況を確認', exact: true })).toBeEnabled();
+  await expect(guide).toContainText('終了して開き直してください');
+  await page.screenshot({ path: '/private/tmp/kotonoha-permission-pending.png' });
+  const bounds = await guide.boundingBox();
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.y).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(450);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(680);
+  await page.keyboard.press('Escape');
+  await expect(guide).not.toBeVisible();
+  await expect(page.locator('.permission-notice')).toContainText('システム音声へのアクセスがまだ許可されていません');
+  await page.getByRole('button', { name: '音声の許可を設定', exact: true }).click();
+  await expect(guide).toBeVisible();
+  expect(await page.evaluate(() => window.testCalls)).toEqual(['permission']);
+  await guide.getByRole('button', { name: 'あとで設定する', exact: true }).click();
+  await page.getByLabel('表示言語', { exact: true }).selectOption('en');
+  await expect(guide).toHaveAccessibleName('Before you start translating');
+  await expect(guide).toContainText('Choose “Allow” in macOS');
+});
+
+test('permission revocation and failures show localized actionable guidance without raw helper errors', async ({ page }) => {
+  await bridge(page);
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: '翻訳を開始', exact: true })).toBeEnabled();
+  await page.evaluate(() => window.testEmit({ type: 'error', code: 'capture_permission_required', message: 'audio-capture: Screen & System Audio Recording permission is required' }));
+  const guide = page.getByRole('dialog');
+  await expect(guide).toBeVisible();
+  await expect(page.getByText(/audio-capture:/)).toHaveCount(0);
+  await page.evaluate(() => { window.testRequestFailure = true; });
+  await guide.getByRole('button', { name: '許可画面へ進む', exact: true }).click();
+  await expect(guide).toContainText('許可画面を開けませんでした。システム設定から許可して');
+  await page.evaluate(() => { window.testStatusFailure = true; });
+  await guide.getByRole('button', { name: '許可状況を確認', exact: true }).click();
+  await expect(guide).toContainText('音声へのアクセスを確認できませんでした。少し待って');
+  await expect(guide.getByRole('button', { name: 'システム設定を開く', exact: true })).toBeEnabled();
+  expect(await page.evaluate(() => window.testCalls)).toEqual(['permission']);
+});
+
+test('settings-first setup and failed permission requests retain an explicit prompt retry', async ({ page }) => {
+  await bridge(page, null, { permission: 'required', requestResult: 'granted' });
+  await page.goto('/');
+  const guide = page.getByRole('dialog');
+  await guide.getByRole('button', { name: 'システム設定を開く', exact: true }).click();
+  await expect(guide.getByRole('button', { name: '許可状況を確認', exact: true })).toBeEnabled();
+  await page.evaluate(() => { window.testRequestFailure = true; });
+  await guide.getByRole('button', { name: '許可画面へ進む', exact: true }).click();
+  await expect(guide).toContainText('許可画面を開けませんでした');
+  await page.evaluate(() => { window.testRequestFailure = false; });
+  await guide.getByRole('button', { name: '許可画面へ進む', exact: true }).click();
+  await expect(guide).toContainText('システム音声へのアクセスを確認できました');
+  expect(await page.evaluate(() => window.testCalls)).toEqual(['settings', 'permission', 'permission']);
+  await guide.getByRole('button', { name: '閉じて翻訳へ', exact: true }).click();
+  await page.getByRole('button', { name: '翻訳を開始', exact: true }).click();
+  await expect(page.getByRole('button', { name: '翻訳を停止', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => window.testCalls)).toEqual(['settings', 'permission', 'permission', 'start']);
 });

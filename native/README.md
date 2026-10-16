@@ -6,8 +6,9 @@ The Python backend executes `native/bin/audio-capture`. This wrapper immediately
 
 ## Process protocol
 
-- No arguments: request Screen & System Audio Recording permission when necessary, then emit continuous raw signed 16-bit little-endian mono PCM at 16,000 samples/second on stdout. There is no WAV header and no framing; the backend must accumulate even-byte samples and frame them for ASR.
+- No arguments: require existing Screen & System Audio Recording permission, then emit continuous raw signed 16-bit little-endian mono PCM at 16,000 samples/second on stdout. Missing permission emits the stable `audio-capture: capture_permission_required` diagnostic and exits with status 77 without requesting access. There is no WAV header and no framing; the backend must accumulate even-byte samples and frame them for ASR.
 - `--check`: return one JSON object on stdout, for example `{"available":false,"permission":"required","sample_rate":16000,"channels":1,"format":"pcm_s16le"}`. This preflight never prompts and exits successfully even when permission is missing. The backend must inspect `available`.
+- `--request-permission`: explicitly request permission when it has not yet been determined and return the same JSON status as `--check`. This setup command never creates a capture stream or writes PCM. Previously denied access must be enabled in System Settings; macOS does not repeat that prompt.
 - `--self-test`: synthesize a 48 kHz stereo tone, run the same stateful conversion used by capture, and verify PCM duration, downmix amplitude, frequency, and little-endian decoding. Diagnostics go to stderr; stdout stays empty.
 - SIGINT or SIGTERM: stop ScreenCaptureKit, flush the converter, and exit. Keep draining stdout while awaiting shutdown. Closing the output pipe is treated as an audio delivery failure.
 - Exit status: `0` for normal shutdown or successful verification; `77` for missing permission; `64` for invalid arguments; `1` for startup/other errors; `2` for stream failure; `3` for conversion/output failure.
@@ -18,7 +19,7 @@ The helper excludes its own process audio and disables microphone capture. Scree
 
 ## Permission and validation limits
 
-Initial system-audio capture is an explicit user operation. macOS may ask for permission and may require restarting capture after permission changes in System Settings → Privacy & Security → Screen & System Audio Recording. A terminal or parent application can also appear in macOS privacy attribution during development.
+Permission setup and initial system-audio capture are separate explicit user operations. After changing permission in System Settings → Privacy & Security → Screen & System Audio Recording, check permission again; macOS may require restarting kotonoha before the helper sees the change. A terminal or parent application can also appear in macOS privacy attribution during development. The helper bundle identifier is preserved across this change.
 
 Compilation, arm64 inspection, DSP self-test, and permission preflight are automated checks. Actual system-audio delivery, OS permission prompts, and shutdown during live capture require an authorized interactive session and are not exercised by `--verify`. The helper needs a logged-in graphical macOS session and an available display. It cannot capture protected media when macOS or the playback application restricts it.
 

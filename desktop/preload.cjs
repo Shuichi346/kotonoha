@@ -2,6 +2,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('kotonoha', {
   snapshot: () => ipcRenderer.invoke('app:snapshot'),
   status: () => ipcRenderer.invoke('app:status'),
+  requestCapturePermission: () => ipcRenderer.invoke('app:capture-permission'),
+  openCaptureSettings: () => ipcRenderer.invoke('app:capture-settings'),
   settings: (value) => ipcRenderer.invoke('app:settings', value),
   start: () => ipcRenderer.invoke('app:start'),
   stop: () => ipcRenderer.invoke('app:stop'),

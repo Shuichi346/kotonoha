@@ -9,6 +9,12 @@ private func diagnostic(_ message: String) {
     FileHandle.standardError.write(Data((message + "\n").utf8))
 }
 
+private func permissionDenied(_ error: Error) -> Bool {
+    let failure = error as NSError
+    return failure.domain == SCStreamErrorDomain
+        && failure.code == SCStreamError.Code.userDeclined.rawValue
+}
+
 private struct CaptureError: LocalizedError {
     let message: String
     var errorDescription: String? { message }
@@ -107,7 +113,11 @@ private final class AudioOutput: NSObject, SCStreamOutput, SCStreamDelegate, @un
     }
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
-        diagnostic("audio-capture: ScreenCaptureKit stopped: \(error.localizedDescription)")
+        if permissionDenied(error) {
+            diagnostic("audio-capture: capture_permission_required")
+        } else {
+            diagnostic("audio-capture: ScreenCaptureKit stopped: \(error.localizedDescription)")
+        }
         stopped.yield(2)
     }
 
@@ -165,8 +175,10 @@ private struct AudioCapture {
     static func main() async {
         signal(SIGPIPE, SIG_IGN)
         let args = Array(CommandLine.arguments.dropFirst())
-        if args == ["--check"] {
+        if args == ["--check"] || args == ["--request-permission"] {
+            // Permission setup is separate from capture and never creates an SCStream.
             let allowed = CGPreflightScreenCaptureAccess()
+                || (args == ["--request-permission"] && CGRequestScreenCaptureAccess())
             print("{\"available\":\(allowed),\"permission\":\"\(allowed ? "granted" : "required")\",\"sample_rate\":16000,\"channels\":1,\"format\":\"pcm_s16le\"}")
             return
         }
@@ -178,13 +190,13 @@ private struct AudioCapture {
             return
         }
         if !args.isEmpty {
-            diagnostic("Usage: audio-capture [--check | --self-test]\nDefault: system audio as raw 16 kHz mono PCM16 little endian on stdout.")
+            diagnostic("Usage: audio-capture [--check | --request-permission | --self-test]\nDefault: system audio as raw 16 kHz mono PCM16 little endian on stdout.")
             exit(64)
         }
 
-        // Only the explicit capture command can request permission. --check never prompts.
-        guard CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess() else {
-            diagnostic("audio-capture: Screen & System Audio Recording permission is required. Enable LiveCaption Audio in System Settings → Privacy & Security, then restart capture.")
+        // Missing access returns to the setup UI; capture must not request permission.
+        guard CGPreflightScreenCaptureAccess() else {
+            diagnostic("audio-capture: capture_permission_required")
             exit(77)
         }
         let events = AsyncStream<Int32>.makeStream()
@@ -230,6 +242,10 @@ private struct AudioCapture {
             diagnostic("audio-capture: stopped.")
             exit(code)
         } catch {
+            if permissionDenied(error) {
+                diagnostic("audio-capture: capture_permission_required")
+                exit(77)
+            }
             diagnostic("audio-capture: \(error.localizedDescription)")
             exit(1)
         }

@@ -9,7 +9,7 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 
-from backend.runtime import receive_event
+from backend.runtime import CapturePermissionError, receive_event
 
 Send = Callable[[dict], Awaitable[None]]
 
@@ -120,6 +120,8 @@ class LiveSession:
                 if self.stopping.is_set():
                     return
                 error = await process.stderr.read(8192)
+                if b"capture_permission_required" in error:
+                    raise CapturePermissionError()
                 raise RuntimeError(
                     error.decode(errors="replace").strip() or "音声キャプチャが終了しました。"
                 )
@@ -141,6 +143,9 @@ class LiveSession:
 
     async def run(self):
         try:
+            await self.runtime.check_capture_permission()
+            if self.stopping.is_set():
+                return
             await self.send(
                 {
                     "type": "status",
@@ -208,6 +213,9 @@ class LiveSession:
                     raise RuntimeError("残りの翻訳を60秒以内に完了できませんでした。")
         except asyncio.CancelledError:
             raise
+        except CapturePermissionError as error:
+            with contextlib.suppress(Exception):
+                await self.send({"type": "error", "code": error.code, "message": str(error)})
         except Exception as error:
             with contextlib.suppress(Exception):
                 await self.send(

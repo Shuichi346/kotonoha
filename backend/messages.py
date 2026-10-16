@@ -11,6 +11,16 @@ MESSAGES = {
         "Screen and system audio permission is required when starting.",
     "音声キャプチャの状態を取得できません。":
         "Unable to check audio capture status.",
+    "翻訳を始める前に、システム音声の許可を設定してください。":
+        "Set up system audio permission before starting translation.",
+    "音声の許可を確認できません。macOS のダイアログを閉じて、もう一度確認してください。":
+        "Unable to check audio permission. Close the macOS dialog, then check again.",
+    "音声の許可を確認中です。macOS のダイアログを確認してください。":
+        "Checking audio permission. Check the macOS dialog.",
+    "システム音声の許可がまだ確認できません。設定で kotonoha を許可したあと、"
+    "「許可を確認」を押してください。オンでも確認できない場合は kotonoha を再起動してください。":
+        "System audio permission has not been confirmed. Enable kotonoha in System Settings, "
+        "then choose Check permission. If it is already enabled, restart kotonoha.",
     "NeMo CLI とモデルが必要です。npm run prepare:models を実行してください。":
         "The NeMo CLI and model are required. Run npm run prepare:models.",
     "翻訳モデルがありません。npm run prepare:models を実行してください。":

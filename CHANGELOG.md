@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added a Japanese/English first-use audio permission guide with separate permission, confirmation, and translation actions, settings access, and retry guidance.
 - Added an arm64 macOS app with independent transparent, always-on-top translated subtitles and a separate control window.
 - Added system-output capture through ScreenCaptureKit, streaming NeMo transcription, and local MLX TranslateGemma translation.
 - Added language and caption controls, click-through mode, menu-bar shortcuts, in-memory history, and TXT/SRT export.
@@ -18,6 +19,7 @@
 
 ### Fixed
 
+- Replaced raw recording-permission failures with localized setup guidance and blocked model loading/capture until access is confirmed; permission requests no longer start translation.
 - Removed the packaged startup dependency on the protected Documents checkout by staging the local runtime in Application Support.
 - Guarded controller activation after window destruction and during shutdown, and prevented background errors from forcing focus or opening a blocking startup error dialog.
 - Started subtitles hidden and click-through, replaced the screen-saver level with floating, and reset mouse/keyboard input on hide, error, stop, and quit.

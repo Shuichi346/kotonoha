@@ -3,16 +3,15 @@
 import asyncio
 import contextlib
 import hmac
-import json
 import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 
-from backend.config import CAPTURE, asr_ready, nemo_binary, translation_ready
+from backend.config import asr_ready, nemo_binary, translation_ready
 from backend.messages import header_language, localize, localize_event, ui_language
 from backend.pipeline import LiveSession
-from backend.runtime import NemoRuntime
+from backend.runtime import NemoRuntime, capture_permission
 from backend.translation import Translator
 
 # Curated transcription-ready and broad-coverage languages exposed by the app.
@@ -81,6 +80,7 @@ class SessionManager:
 def create_app(token: str | None = None, manager: SessionManager | None = None):
     secret = token if token is not None else os.environ.get("RT_TOKEN", "")
     sessions = manager or SessionManager()
+    permission_lock = asyncio.Lock()
 
     @asynccontextmanager
     async def lifespan(app):
@@ -98,33 +98,30 @@ def create_app(token: str | None = None, manager: SessionManager | None = None):
     def authorized(value):
         return bool(secret) and hmac.compare_digest((value or "").encode(), secret.encode())
 
-    async def capture_status():
-        if not CAPTURE.is_file():
-            return {"ready": False, "detail": "npm run build:native を実行してください。"}
-        process = None
-        try:
-            process = await asyncio.create_subprocess_exec(
-                str(CAPTURE),
-                "--check",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            output, _ = await asyncio.wait_for(process.communicate(), timeout=5)
-            result = json.loads(output)
-            permission = result.get("permission", "unknown")
+    @app.post("/api/capture/permission")
+    async def request_capture_permission(
+        authorization: str | None = Header(default=None),
+        accept_language: str | None = Header(default=None),
+    ):
+        if not (authorization or "").startswith("Bearer ") or not authorized(
+            (authorization or "").removeprefix("Bearer ")
+        ):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        language = header_language(accept_language)
+        if sessions.session and not sessions.session.task.done():
+            result = await capture_permission()
+            return {**result, "detail": localize(result["detail"], language)}
+        if permission_lock.locked():
             return {
-                "ready": bool(result.get("available")),
-                "permission": permission,
-                "detail": "ScreenCaptureKit · 16 kHz PCM"
-                if result.get("available")
-                else "開始時に画面とシステム音声の許可が必要です。",
+                "ready": False,
+                "permission": "unknown",
+                "detail": localize(
+                    "音声の許可を確認中です。macOS のダイアログを確認してください。", language
+                ),
             }
-        except (OSError, ValueError, TimeoutError):
-            return {"ready": False, "detail": "音声キャプチャの状態を取得できません。"}
-        finally:
-            if process and process.returncode is None:
-                process.kill()
-                await process.wait()
+        async with permission_lock:
+            result = await capture_permission(request=True)
+        return {**result, "detail": localize(result["detail"], language)}
 
     @app.get("/api/status")
     async def status(
@@ -136,7 +133,7 @@ def create_app(token: str | None = None, manager: SessionManager | None = None):
         ):
             raise HTTPException(status_code=401, detail="Unauthorized")
         result = {
-            "capture": await capture_status(),
+            "capture": await capture_permission(),
             "asr": {
                 "ready": bool(nemo_binary()) and asr_ready(),
                 "detail": "Nemotron 3.5 · Metal"

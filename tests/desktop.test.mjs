@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { defaultSettings, validatedSettings, loadSettings } from '../desktop/preferences.mjs';
 import { desktopLabels } from '../desktop/locale.mjs';
+import { createCaptureActions } from '../desktop/capture-actions.mjs';
 
 test('legacy settings migrate with Japanese UI and preserve subtitle preferences', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'kotonoha-settings-'));
@@ -68,4 +69,56 @@ test('runtime staging is independent of the checkout and reuses only complete sn
   assert.throws(() => stageRuntime(source, path.join(source, 'runtime')), /outside the checkout/);
   symlinkSync(path.join(source, 'models/fixture'), path.join(source, 'models/unsafe'));
   assert.throws(() => stageRuntime(source, path.join(dir, 'other')), /depends on the checkout/);
+});
+
+test('permission requests are single flight and start waits until the permission dialog settles', async () => {
+  let allowPermission;
+  const events = [];
+  const actions = createCaptureActions({
+    requestPermission: () => { events.push('permission'); return new Promise((resolve) => { allowPermission = resolve; }); },
+    start: async () => { events.push('start'); },
+  });
+  const first = actions.requestPermission();
+  assert.equal(actions.requestPermission(), first);
+  const start = actions.start();
+  assert.equal(actions.start(), start);
+  await Promise.resolve();
+  assert.deepEqual(events, ['permission']);
+  const result = { ready: true, permission: 'granted', detail: 'Ready' };
+  allowPermission(result);
+  assert.equal(await first, result);
+  await start;
+  assert.deepEqual(events, ['permission', 'start']);
+});
+
+test('failed permission requests release the action queue for retry', async () => {
+  let attempts = 0;
+  const actions = createCaptureActions({
+    requestPermission: async () => {
+      if (++attempts === 1) throw new Error('Service unavailable');
+      return { ready: false, permission: 'required' };
+    },
+    start: async () => 'started',
+  });
+  await assert.rejects(actions.requestPermission(), /Service unavailable/);
+  assert.deepEqual(await actions.requestPermission(), { ready: false, permission: 'required' });
+  assert.equal(await actions.start(), 'started');
+  assert.equal(attempts, 2);
+});
+
+test('permission requests wait for a pending start without executing it again', async () => {
+  let finishStart;
+  const events = [];
+  const actions = createCaptureActions({
+    start: () => { events.push('start'); return new Promise((resolve) => { finishStart = resolve; }); },
+    requestPermission: async () => { events.push('permission'); },
+  });
+  const start = actions.start();
+  const permission = actions.requestPermission();
+  await Promise.resolve();
+  assert.deepEqual(events, ['start']);
+  finishStart();
+  await start;
+  await permission;
+  assert.deepEqual(events, ['start', 'permission']);
 });
