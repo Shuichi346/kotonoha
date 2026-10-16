@@ -57,6 +57,7 @@ const ja = {
   waitingForAudio: '音声を待っています',
   overlayEmpty: 'ここに翻訳字幕が表示されます',
   overlayHint: 'ドラッグで移動 · ⌘⇧Kで操作画面',
+  overlayLockedHint: 'クリックは下のアプリに届きます · ⌘⇧Lで移動',
   desktopRequired: 'デスクトップアプリで開いてください。ターミナルで npm start を実行できます。',
 } as const;
 type Dictionary = { [Key in keyof typeof ja]: string };
@@ -118,6 +119,7 @@ const en: Dictionary = {
   waitingForAudio: 'Waiting for audio',
   overlayEmpty: 'Translated subtitles will appear here',
   overlayHint: 'Drag to move · ⌘⇧K for controls',
+  overlayLockedHint: 'Clicks pass to the app below · ⌘⇧L to move',
   desktopRequired: 'Open the desktop app. You can run npm start in a terminal.',
 };
 export function uiLanguage(value: unknown): UiLanguage { return value === 'en' ? 'en' : 'ja'; }

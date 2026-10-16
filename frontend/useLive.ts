@@ -7,8 +7,8 @@ export function useLive() {
   const [state, setState] = useState<SessionState>('stopped');
   const [latest, setLatest] = useState<Subtitle | null>(null);
   const [history, setHistory] = useState<Subtitle[]>([]);
-  const [visible, setVisible] = useState(true);
-  const [locked, setLocked] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const [locked, setLocked] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [partial, setPartial] = useState('');

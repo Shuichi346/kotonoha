@@ -1,8 +1,11 @@
 import { packager } from '@electron/packager';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { stageRuntime } from './stage-runtime.mjs';
 await mkdir('.scratch', { recursive: true });
-await writeFile('.scratch/runtime.json', JSON.stringify({ root: resolve('.') }));
+const runtime = stageRuntime(resolve('.'), process.env.KOTONOHA_RUNTIME_BASE);
+await writeFile('.scratch/runtime.json', JSON.stringify(runtime));
+console.log(`Local runtime: ${runtime.root}`);
 const paths = await packager({
   dir: '.', out: process.env.KOTONOHA_PACKAGE_OUT || 'release', name: 'kotonoha', platform: 'darwin', arch: 'arm64',
   appBundleId: 'jp.kotonoha.live-subtitles', appCategoryType: 'public.app-category.productivity',

@@ -34,3 +34,38 @@ test('desktop localization covers the same keys in both languages', () => {
   assert.equal(ja.showControls, '操作画面を表示'); assert.equal(en.showControls, 'Show controls');
   assert.equal(en.quit, 'Quit kotonoha');
 });
+
+test('destroyed or quitting windows cannot reopen or steal focus', async () => {
+  const { showController, releaseOverlay, setOverlayInput } = await import('../desktop/window-actions.mjs');
+  const dead = { isDestroyed: () => true };
+  assert.equal(showController(dead), false);
+  assert.equal(showController(null), false);
+  assert.equal(showController({}, { quitting: true }), false);
+  assert.doesNotThrow(() => releaseOverlay(dead));
+  const calls = [];
+  const live = { isDestroyed: () => false, isFocused: () => true, blur: () => calls.push('blur'),
+    setFocusable: (value) => calls.push(`focusable:${value}`), showInactive: () => calls.push('inactive'),
+    setIgnoreMouseEvents: (value) => calls.push(`ignore:${value}`), hide: () => calls.push('hide') };
+  assert.equal(showController(live, { focus: false }), true);
+  setOverlayInput(live, false);
+  releaseOverlay(live);
+  assert.deepEqual(calls, ['inactive', 'focusable:true', 'ignore:false', 'blur', 'focusable:false', 'ignore:true', 'hide']);
+});
+
+test('runtime staging is independent of the checkout and reuses only complete snapshots', async () => {
+  const { stageRuntime } = await import('../scripts/stage-runtime.mjs');
+  const { mkdirSync, symlinkSync, existsSync } = await import('node:fs');
+  const dir = mkdtempSync(path.join(tmpdir(), 'kotonoha-runtime-'));
+  const source = path.join(dir, 'Documents/source');
+  for (const name of ['backend', '.venv/bin', 'models', 'native/bin']) mkdirSync(path.join(source, name), { recursive: true });
+  for (const name of ['backend/app.py', '.venv/pyvenv.cfg', 'native/bin/audio-capture', 'models/fixture']) writeFileSync(path.join(source, name), name);
+  symlinkSync(process.execPath, path.join(source, '.venv/bin/python'));
+  const installed = stageRuntime(source, path.join(dir, 'Application Support/runtime'));
+  assert(!installed.root.startsWith(source));
+  assert.equal(readFileSync(path.join(installed.root, 'backend/app.py'), 'utf8'), 'backend/app.py');
+  assert(existsSync(path.join(installed.root, '.complete.json')));
+  assert.deepEqual(stageRuntime(source, path.join(dir, 'Application Support/runtime')), installed);
+  assert.throws(() => stageRuntime(source, path.join(source, 'runtime')), /outside the checkout/);
+  symlinkSync(path.join(source, 'models/fixture'), path.join(source, 'models/unsafe'));
+  assert.throws(() => stageRuntime(source, path.join(dir, 'other')), /depends on the checkout/);
+});

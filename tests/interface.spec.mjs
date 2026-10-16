@@ -49,13 +49,21 @@ test('subtitle-only surface is transparent, receives actual events, hides stale 
   await expect(page.getByRole('main')).toHaveAttribute('aria-label', '字幕ウィンドウ');
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
   await expect(page.getByText('音声を、あなたの言葉に。')).toHaveCount(0);
+  await expect(page.locator('.overlay-hint')).toBeVisible();
+  expect(await page.locator('.overlay').evaluate((node) => getComputedStyle(node).backgroundColor)).toBe('rgba(220, 224, 230, 0.78)');
   await page.evaluate((value) => window.testEmit({ ...value, receivedAt: Date.now() }), subtitle);
   await expect(page.getByText(subtitle.text, { exact: true })).toBeVisible();
   await expect(page.getByText(subtitle.source, { exact: true })).toBeVisible();
   const style = await page.locator('.caption-text').evaluate((node) => ({ color: getComputedStyle(node).color, size: getComputedStyle(node).fontSize, textStroke: getComputedStyle(node).webkitTextStrokeWidth }));
   expect(style).toEqual({ color: 'rgb(255, 255, 255)', size: '40px', textStroke: '3px' });
+  await page.evaluate(() => window.kotonoha.lock(true));
+  await expect(page.locator('.overlay')).toHaveClass(/is-locked/);
+  await expect(page.locator('.overlay-controls')).toBeHidden();
+  expect(await page.locator('.overlay').evaluate((node) => ({ background: getComputedStyle(node).backgroundColor, drag: getComputedStyle(node).getPropertyValue('-webkit-app-region') }))).toEqual({ background: 'rgba(0, 0, 0, 0)', drag: 'no-drag' });
   await page.clock.fastForward(13000);
   await expect(page.getByText(subtitle.text, { exact: true })).toHaveCount(0);
+  await expect(page.locator('.overlay-hint')).toContainText('クリックは下のアプリに届きます');
+  expect(await page.locator('.overlay').evaluate((node) => getComputedStyle(node).backgroundColor)).toBe('rgba(220, 224, 230, 0.78)');
 });
 
 test('history, export, error handling and source language conflicts', async ({ page }) => {

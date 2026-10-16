@@ -6,25 +6,25 @@ The app captures **Mac system output**, including YouTube in a browser. It uses 
 
 ## Open the app on this Mac
 
-The current Retina-icon correction build is `release/retina-fix/kotonoha-darwin-arm64/kotonoha.app`. Ordinary `npm run package` produces `release/kotonoha-darwin-arm64/kotonoha.app`. Open it in Finder, choose the audio and subtitle languages, and click **翻訳を開始**. On first use, macOS may request Screen & System Audio Recording permission for **LiveCaption Audio** or the parent app. Allow the request in System Settings → Privacy & Security → Screen & System Audio Recording, then restart translation if required. Models load before audio capture starts.
+The current startup and overlay correction build is `release/startup-fix/kotonoha-darwin-arm64/kotonoha.app`. Ordinary `npm run package` produces `release/kotonoha-darwin-arm64/kotonoha.app`. Open it in Finder, choose the audio and subtitle languages, and click **翻訳を開始**. On first use, macOS may request Screen & System Audio Recording permission for **LiveCaption Audio** or the parent app. Allow the request in System Settings → Privacy & Security → Screen & System Audio Recording, then restart translation if required. Models load before audio capture starts. The packaged Python/model runtime is staged outside Documents so it does not require access to the source checkout at launch.
 
 The interface defaults to Japanese. Choose **表示言語 → English** to switch the controls, menus, subtitle toolbar, and service messages to English. This preference is saved independently of the audio/subtitle language pair. Legacy settings are read from the former kotoba profile without modifying it; new settings are saved in the kotonoha profile. Quit the old app before opening the new one because production audio services use the same loopback port.
 
-Start playing the video. Captions appear in the independent subtitle window after speech is recognized and translated. Use **字幕だけにする** to hide the controls. The video continues in its own application.
+Start playing the video. Captions appear in the independent subtitle window after speech is recognized and translated. It starts hidden with clicks passing through to the app below. Use **字幕だけにする** to hide the controls. The video continues in its own application. When the visible subtitle window is empty, a light-gray guide shows its entire area without hovering. Unlocking also shows its interactive bounds; locking restores transparent caption playback.
 
 | Action | Operation |
 |---|---|
-| Move captions | Drag inside the subtitle window; controls appear on hover |
-| Resize captions | Resize the subtitle window at its edge |
+| Move captions | Unlock with **⌘⇧L**, then drag inside the subtitle window; controls appear on hover |
+| Resize captions | Unlock, then resize the subtitle window at its edge |
 | Show controls again | **⌘⇧K**, or the leaf-shaped menu-bar icon |
 | Pass clicks through to video / unlock | **⌘⇧L** |
 | Adjust text | Change font size, original-text display, background opacity, and expiry in the controls |
 | Stop translation | **翻訳を停止**, or the menu-bar **翻訳を停止** command |
 | Quit completely | **⌘Q** or menu-bar **kotonohaを終了** |
 
-Closing the controls hides them. Quit the app to stop all owned audio/model processes. Errors reopen the controls. Caption history keeps the latest 1,000 entries in memory until the app quits; export TXT or SRT before quitting if needed. SRT timing is an approximate transcript timeline, not synchronization with a video file.
+Closing the controls hides them. Quit the app to stop all owned audio/model processes. Errors hide and lock the subtitles and show the controls without forcing keyboard focus. Hiding the subtitle window also resets it to click-through mode. Caption history keeps the latest 1,000 entries in memory until the app quits; export TXT or SRT before quitting if needed. SRT timing is an approximate transcript timeline, not synchronization with a video file.
 
-**This is a local development app.** Its packaged interface uses the Python environment, models, and native helper in this repository. Keep this folder in place. It is not a standalone signed/notarized installer for another Mac. Moving the repository requires rebuilding the app.
+**This is a local development app.** Packaging copies the Python environment, backend, models, and native helper to a versioned snapshot under `~/Library/Application Support/kotonoha/runtime/`; `Contents/Resources/runtime.json` selects that snapshot. Keep the snapshot and this Mac's installed base Python and NeMo executable available. The source checkout is used for development and rebuilding, not packaged startup. Repackage after backend, dependency, model, or helper changes. This is not a standalone signed/notarized installer for another Mac.
 
 ## Development setup
 
@@ -47,7 +47,7 @@ Create the local `.app` again with `npm run package`. Packaging targets **darwin
 
 ## Implementation
 
-- `frontend/`: React + TypeScript + Vite controls and subtitle-only view. A transparent canvas, outlined white text, hover-only controls, and no persistent chrome make the overlay look like subtitles.
+- `frontend/`: React + TypeScript + Vite controls and subtitle-only view. Caption playback uses a transparent canvas and outlined white text. Empty windows and unlocked positioning show a gray guide; toolbar controls appear only while interacting in unlocked mode.
 - `desktop/`: Electron owns two independent windows, a menu-bar controller, shortcuts, IPC, and the Python process group. The renderer has no Node access; the main process validates IPC senders and owns local credentials.
 - `backend/`: Python 3.13 + FastAPI, NeMo streaming WebSocket, and a persistent MLX worker. Models remain warm between sessions. The backend listens on authenticated loopback port **8765**, and owns NeMo on **8766**. Neither listener is exposed to the network.
 - `native/`: Swift ScreenCaptureKit helper produces 16 kHz mono PCM16. Video samples are never delivered or stored.
@@ -76,3 +76,5 @@ After the 2026-10-16 branding/language update, the frontend build, six scripted 
 Scripted UI tests cover controls, transparent captions, real event rendering with a fake bridge, caption expiry, history/export, and error display. Backend tests cover authentication, single-session ownership, final utterance flush, PCM framing, queue pressure, and translation stop tokens. Real-model fixture evidence and protocol details are in [backend/README.md](backend/README.md); capture conversion and permission boundaries are in [native/README.md](native/README.md).
 
 Actual playback capture and macOS permission UI have not been exercised in automated verification. Protected media may restrict capture. The recommended final operation check is to grant permission, play a short English YouTube video, select English → 日本語, and confirm Japanese captions beside or over the video, then stop translation. No screenshots or AI-operated browser/native UI were used for verification, following the requested preparation skills.
+
+The startup/overlay correction additionally passed five lifecycle/runtime tests, six scripted UI tests (including gray empty/expired windows and transparent locked captions), and a hidden smoke against the final `release/startup-fix` artifact. The smoke verifies mouse-ignore API transitions and focusability, not physical clicks in another app. A restricted child-Python probe passed with the source checkout denied; the first-launch macOS permission dialog itself remains untested. To smoke this correction explicitly, set `KOTONOHA_SMOKE_APP=release/startup-fix/kotonoha-darwin-arm64/kotonoha.app/Contents/MacOS/kotonoha` when running `node scripts/smoke-desktop.mjs`.

@@ -34,8 +34,16 @@ This is the single authoritative implementation and acceptance checklist. The or
 - [x] MP1 — Create a corrected app build and verify its archived template assets.
 - [x] MD1 — Record the root cause and corrected verification evidence.
 
-Current: Complete
-Next: None
+- [x] S1 — Guard window actions during shutdown and remove focus/overlay behaviors that risk interfering with OS permission dialogs.
+- [x] S2 — Stage the local Python/models/helper runtime in the app's Application Support directory instead of Documents.
+- [x] SV1 — Pass focused lifecycle/runtime regression tests and build checks.
+- [x] S3 — Make an empty subtitle window light gray without hover, expose unlocked bounds, and disable focus/drag behavior in click-through mode.
+- [x] SV3 — Verify empty/expired captions and locked/unlocked input transitions using bounded scripted checks.
+- [x] SV2 — Package and verify the actual repaired artifact, including a restricted-environment startup check without displaying windows or recording.
+- [x] SD1 — Update operating documentation and record exact limitations.
+
+Current: Complete — The startup and empty-overlay corrections are packaged and verified within the stated evidence limits.
+Next: None.
 
 Save this tracker after each implementation step or independent verification unit. Show the full checklist at execution start, phase boundaries, and completion; use changed lines with Current/Next for ordinary updates, unless the user requests shorter reporting. Do not create a second checklist in another file. Narrative rationale belongs in NOTES.md and component documentation.
 
@@ -94,7 +102,7 @@ Use the narrow bridge in `desktop/preload.cjs` with context isolation and render
 
 Start windows from `app.whenReady().then(...)`; do not block main-module evaluation on a top-level readiness wait. Launch Python in an owned process group. Quit requests graceful shutdown, then kills that group after the bounded grace period to avoid orphaned model or capture processes.
 
-`scripts/package.mjs` packages darwin arm64 and writes the checkout root to `Contents/Resources/runtime.json`. The app uses that checkout's `.venv`, backend, native helper, and models. Moving the checkout requires regenerating the local app; packaging does not create a self-contained distribution.
+`scripts/package.mjs` packages darwin arm64 and stages `.venv`, backend, native helper, and models through `scripts/stage-runtime.mjs` into a versioned Application Support snapshot. It writes that root to `Contents/Resources/runtime.json`. Packaged startup must not depend on the Documents checkout. The installed base Python and NeMo executable are still required; packaging does not create a self-contained distribution.
 
 ### Source references
 
@@ -118,7 +126,7 @@ These are the dependency-ordered construction steps for the delivered solution. 
 | I5 | Desktop lifecycle: desktop/main.mjs, desktop/transcript.mjs | Own windows, authenticated services, shortcuts, validated IPC, persistence, errors, and process-group cleanup. | I2, I3, I4 | V2/V3 cover their respective contracts; V7 covers packaged integration and shutdown. |
 | I6 | Local app: scripts/package.mjs, scripts/launch.mjs, release/kotonoha-darwin-arm64/kotonoha.app | Build for arm64, preserve runtime.json linkage, and document the local-development distribution boundary. | I5 | Existing package artifact, V7, and V8. |
 
-No destructive migration is involved. Preserve unrelated files and the currently working app. If runtime.json points to a moved checkout, inspect the path before rebuilding; do not delete models or environments as a speculative fix. Permission errors require their actual OS remedy. Packaging overwrites the generated local app, so do not rebuild it during this documentation-only task or while it is being used.
+No destructive migration is involved. Preserve unrelated files and the currently working app. Inspect runtime.json and its snapshot before rebuilding; do not delete models or environments as a speculative fix. Packaging overwrites its selected generated app; use a separate output directory for corrections when the existing copy may be in use.
 
 ## Finite Verification and Recorded Results
 
@@ -167,3 +175,15 @@ The user supplied evidence that the 2x menu template was clipped. Inspecting the
 Acceptance is bounded to the affected asset pipeline: regenerate the PNG assets (60 seconds); run `xcrun swift -module-cache-path .scratch/icon-module-cache scripts/check-menu-icons.swift` (30 seconds), requiring 18/36 pixel rasters with equal 18-point size, transparent outer margins, and mean alpha difference below 0.07 after reducing the 2x silhouette; package the correction (120 seconds) and compare archived image bytes (30 seconds). Each check has at most three executions. The first icon-check execution found test-script compilation errors and counts toward that budget; repair these before the next run. No application UI, capture, GPU, or full test suite needs to run for a template-only change. Preserve running apps; a separate corrected package may be produced for safe replacement after quit. Update this tracker and the repository notes with exact results.
 
 Retina correction results: generation succeeded; mask verification passed on execution 2 after fixing test compilation. The 1x/2x bounds are [1,1,15,15] and [3,3,32,31] and the reduced-mask mean alpha difference is 0.0057. The separate `release/retina-fix/kotonoha-darwin-arm64/kotonoha.app` package passed on execution 1; archive bytes match both corrected PNG assets and its executable is arm64. Native rendering and model mechanics are unchanged. The running build was preserved. Recommended operation check (not performed by the agent): quit the previous app and open this separate correction build; the entire leaf should appear in the menu bar.
+
+## Startup and Permission-Dialog Safety — 2026-10-16
+
+The user reported Python `PermissionError` reading Documents/.venv/pyvenv.cfg, an uncaught destroyed-controller exception on activation, and unresponsive/dimmed macOS settings plus the Documents permission dialog. Treat the interaction symptoms as user evidence; do not claim the exact window-server mechanism is proven. Remove the risky screen-saver overlay level, default to click-through, keep subtitles hidden before capture is explicitly started, and hide them on errors/stop/quit. Background failures must not focus-steal. Guard callbacks after window destruction and during shutdown.
+
+The existing checkout-linked runtime causes protected-folder access when Finder launches the app without Codex/terminal privileges. Packaging must stage Python dependencies, backend, native helper, and models into a versioned local `~/Library/Application Support/kotonoha/runtime/` snapshot, with no dependency symlinks back into Documents. Retain the native helper identity, local model choices, UI settings, and loopback authentication. Runtime files outside the workspace require the normal command approval; prepare the staging script first. Do not change macOS privacy settings or start capture during verification.
+
+Finite checks: focused Node lifecycle/staging tests (30 seconds), existing build (30 seconds per stage), runtime staging/package (180 seconds each, bounded output), actual packaged startup using a hidden test profile/port8767 (60 seconds), and macOS sandbox-exec profile denying checkout access for a headless child Python/status check (30 seconds). Inspect arm64 and exact runtime linkage. Limit each verification unit to initial plus two focused repair reruns. Existing model/DSP and icon-mask evidence remains valid. Update the tracker after each unit and keep failure evidence distinct from a passed Finder/permission-dialog interaction, which the agent must not claim to have performed.
+
+Startup fix evidence so far: five Node tests passed on execution 2 after fixing /var versus /private/var path canonicalization in runtime staging; frontend type/build passed on execution 1. Staging and packaging passed on execution 1. With the checkout explicitly denied by sandbox-exec, the staged Python site module, backend import, and both model readiness checks passed on execution 1. The repaired app points to `/Users/shuichi/Library/Application Support/kotonoha/runtime/3d3c64aff15c1c13` and its executable is arm64. The original kotoba artifact was not present at its former release path during inspection; no old app was deleted or modified by this fix.
+
+Final follow-up: S3 uses an always-visible light-gray guide for empty subtitle windows, tinted positioning bounds when unlocked, and no drag regions or keyboard focus in locked mode. The user reported successful startup only after allowing Documents access and identified that as the second launch; retain first-launch coverage as unverified. SV1 finished with five tests passing on execution 3 and build passing on execution 3 after the UI follow-up. SV3's six UI tests passed on its second execution, after the first was blocked at browser launch by sandbox permissions. Packaging completed three times for canonical, retina-fix, and final startup-fix outputs; the final artifact is `release/startup-fix/kotonoha-darwin-arm64/kotonoha.app`. SV2's second hidden packaged smoke passed with both models ready, safe mouse-ignore transitions, focusability disabled when locked, guarded activation after controller destruction, and no renderer errors. The final executable is arm64 and its app-icon hash matches the tracked asset. No further check reruns are needed. A broader all-Documents denial probe was declined and not executed; the narrower checkout-denial probe passed. SD1 updated README, CHANGELOG, NOTES, and durable project instructions. Actual first-launch OS permission interaction and physical cross-app clicks remain explicitly outside the automated evidence; recommended human checks are a completion handoff, not acceptance gates.

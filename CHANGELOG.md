@@ -18,4 +18,8 @@
 
 ### Fixed
 
+- Removed the packaged startup dependency on the protected Documents checkout by staging the local runtime in Application Support.
+- Guarded controller activation after window destruction and during shutdown, and prevented background errors from forcing focus or opening a blocking startup error dialog.
+- Started subtitles hidden and click-through, replaced the screen-saver level with floating, and reset mouse/keyboard input on hide, error, stop, and quit.
+- Made empty subtitle windows light gray without hover and exposed unlocked positioning bounds; locked caption playback disables drag regions and preserves transparency.
 - Corrected duplicate Retina scaling that clipped the 2x menu-bar leaf icon, and added transparent-margin and silhouette regression checks.

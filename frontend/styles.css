@@ -70,17 +70,20 @@ footer { display: flex; justify-content: center; align-items: center; gap: 8px; 
 .last-caption { margin-top: 15px; border-top: 1px solid var(--line); padding-top: 12px; }.last-caption span { font-size: 10px; color: #9a9fab; }.last-caption p { font-size: 14px; line-height: 1.7; }
 .history-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; gap: 8px; }.history h1 { font-size: 18px; margin: 0; }.export-buttons { display: flex; gap: 5px; }.export-buttons svg { width: 14px; }.transcript { list-style: none; padding: 0; }.transcript li { padding: 18px 0; border-bottom: 1px solid var(--line); }.transcript time { font-size: 10px; color: #9a9fab; font-variant-numeric: tabular-nums; }.transcript p { font-size: 14px; line-height: 1.8; margin: 6px 0; overflow-wrap: anywhere; }.transcript .source-text { font-size: 11px; color: #8a909c; }.empty { text-align: center; padding: 90px 0; color: #adb2bd; }.empty p { font-size: 13px; }.empty span { font-size: 10px; }
 .subtitle-view, .subtitle-view body, .subtitle-view #root { background: transparent !important; height: 100%; overflow: hidden; }
-.overlay { height: 100vh; width: 100vw; position: relative; display: flex; flex-direction: column; justify-content: end; padding: 32px 24px 20px; color: #fff; -webkit-app-region: drag; user-select: none; }
+.overlay { height: 100vh; width: 100vw; position: relative; display: flex; flex-direction: column; justify-content: end; padding: 32px 24px 20px; color: #fff; -webkit-app-region: no-drag; user-select: none; }
+.overlay:not(.is-locked) { -webkit-app-region: drag; background: rgba(220, 224, 230, .18); box-shadow: inset 0 0 0 1px #a0a6b780; }
+.overlay.is-empty { background: rgba(220, 224, 230, .78); box-shadow: inset 0 0 0 1px #a0a6b780; }
 .overlay-controls { position: absolute; right: 14px; top: 8px; display: flex; border-radius: 8px; background: #25262b88; color: #fff; opacity: 0; transition: opacity .18s; -webkit-app-region: no-drag; }
-.overlay:hover .overlay-controls, .overlay:focus-within .overlay-controls { opacity: 1; }.is-locked .overlay-controls { pointer-events: none; }
+.overlay:hover .overlay-controls, .overlay:focus-within .overlay-controls { opacity: 1; }.overlay.is-locked .overlay-controls { pointer-events: none; opacity: 0; visibility: hidden; }
+.is-locked .drag-handle { -webkit-app-region: no-drag; }
 .overlay-controls button, .drag-handle { padding: 6px 9px; display: inline-flex; align-items: center; }.overlay-controls button:hover { background: #ffffff30; }.drag-handle { -webkit-app-region: drag; }
 .caption-area { display: flex; align-items: end; justify-content: center; min-height: 0; width: 100%; overflow: hidden; }
 .caption-lines { padding: 8px 16px; border-radius: 7px; max-width: 100%; text-align: center; }
 .caption-lines p { margin: 0; text-wrap: balance; overflow-wrap: anywhere; }
 .caption-text { color: #fff; font-weight: 650; line-height: 1.35; letter-spacing: .01em; paint-order: stroke fill; -webkit-text-stroke: 3px #121212; text-shadow: 0 2px 5px #000, 0 0 10px #0008; }
 .caption-original { color: #f5f5f5; font-size: .47em; line-height: 1.4; font-weight: 500; margin-bottom: 9px !important; paint-order: stroke fill; -webkit-text-stroke: 1.6px #111; text-shadow: 0 2px 4px #000; }
-.overlay-hint { position: absolute; inset: 50px 20px 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; opacity: 0; transition: opacity .2s; color: #fff; font-size: 16px; text-shadow: 0 1px 4px #000; background: #1519235c; border: 1px dashed #ffffff70; border-radius: 10px; }.overlay-hint span { font-size: 11px; }.overlay:hover .overlay-hint { opacity: 1; }
-.resize-corner { position: absolute; bottom: 5px; right: 5px; width: 12px; height: 12px; border-right: 2px solid #ffffff80; border-bottom: 2px solid #ffffff80; opacity: 0; }.overlay:hover .resize-corner { opacity: 1; }
+.overlay-hint { position: absolute; inset: 50px 20px 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #343a46; font-size: 16px; text-align: center; pointer-events: none; }.overlay-hint span { font-size: 11px; }
+.resize-corner { position: absolute; bottom: 5px; right: 5px; width: 12px; height: 12px; border-right: 2px solid #ffffff80; border-bottom: 2px solid #ffffff80; opacity: 0; }.overlay:not(.is-locked):hover .resize-corner { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { *, *:before, *:after { transition: none !important; } }
 @media (max-width: 460px) { .control-body { padding-left: 20px; padding-right: 20px; } h1 { font-size: 22px; }.titlebar-caption { display: none; } }
 

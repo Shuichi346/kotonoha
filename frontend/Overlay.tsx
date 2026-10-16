@@ -13,7 +13,7 @@ export function Overlay({ live }: { live: Live }) {
     const timer = setTimeout(() => setFresh(false), Math.max(0, remaining));
     return () => clearTimeout(timer);
   }, [latest, settings.expiry]);
-  return <main className={`overlay ${locked ? 'is-locked' : ''}`} aria-label={text.overlay}>
+  return <main className={`overlay ${locked ? 'is-locked' : ''} ${!fresh ? 'is-empty' : ''}`} aria-label={text.overlay}>
     <div className="overlay-controls">
       <span className="drag-handle" title={text.drag}><Icon name="drag"/></span>
       <button title={text.showControllerTitle} aria-label={text.showController} onClick={() => window.kotonoha?.showController()}><Icon name="settings"/></button>
@@ -26,7 +26,7 @@ export function Overlay({ live }: { live: Live }) {
         <p className="caption-text">{latest.text}</p>
       </div> : null}
     </div>
-    {!fresh ? <div className="overlay-hint">{state === 'listening' ? text.waitingForAudio : text.overlayEmpty}<span>{text.overlayHint}</span></div> : null}
+    {!fresh ? <div className="overlay-hint">{state === 'listening' ? text.waitingForAudio : text.overlayEmpty}<span>{locked ? text.overlayLockedHint : text.overlayHint}</span></div> : null}
     <div className="resize-corner" aria-hidden="true"/>
   </main>;
 }
