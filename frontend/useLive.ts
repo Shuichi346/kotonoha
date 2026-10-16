@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { labels, uiLanguage } from './i18n';
 import type { Readiness, SessionState, Settings, Subtitle } from './types';
-export const defaults: Settings = { source: 'en', target: 'ja', uiLanguage: 'ja', fontSize: 40, showOriginal: true, background: 0, expiry: 12 };
+export const defaults: Settings = { source: 'en', target: 'ja', uiLanguage: 'ja', fontSize: 30, showOriginal: false, background: 0, expiry: 12 };
 export function useLive() {
   const [settings, setSettings] = useState(defaults);
   const [state, setState] = useState<SessionState>('stopped');

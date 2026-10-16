@@ -11,6 +11,8 @@ test('legacy settings migrate with Japanese UI and preserve subtitle preferences
   const dir = mkdtempSync(path.join(tmpdir(), 'kotonoha-settings-'));
   const old = path.join(dir, 'legacy.json');
   const current = path.join(dir, 'current.json');
+  assert.equal(loadSettings(current).fontSize, 30);
+  assert.equal(loadSettings(current).showOriginal, false);
   const value = { ...defaultSettings, fontSize: 56, source: 'fr', showOriginal: false };
   delete value.uiLanguage;
   const original = JSON.stringify(value);
@@ -121,4 +123,22 @@ test('permission requests wait for a pending start without executing it again', 
   await start;
   await permission;
   assert.deepEqual(events, ['start', 'permission']);
+});
+
+test('startup subtitles are visible without taking focus and remain locked; hidden checks never show them', async () => {
+  const { showStartupOverlay } = await import('../desktop/window-actions.mjs');
+  const calls = [];
+  const window = {
+    isDestroyed: () => false,
+    isFocused: () => false,
+    setFocusable: (value) => calls.push(['focusable', value]),
+    setIgnoreMouseEvents: (value) => calls.push(['ignore', value]),
+    showInactive: () => calls.push(['showInactive']),
+  };
+  assert.equal(showStartupOverlay(window, { hidden: true }), false);
+  assert.equal(showStartupOverlay(window, { quitting: true }), false);
+  assert.equal(showStartupOverlay({ isDestroyed: () => true }), false);
+  assert.deepEqual(calls, []);
+  assert.equal(showStartupOverlay(window), true);
+  assert.deepEqual(calls, [['focusable', false], ['ignore', true], ['showInactive']]);
 });

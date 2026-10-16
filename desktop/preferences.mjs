@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-export const defaultSettings = { source: 'en', target: 'ja', uiLanguage: 'ja', fontSize: 40, showOriginal: true, background: 0, expiry: 12 };
+export const defaultSettings = { source: 'en', target: 'ja', uiLanguage: 'ja', fontSize: 30, showOriginal: false, background: 0, expiry: 12 };
 function invalid(code) { const error = new Error(code); error.code = code; throw error; }
 export function validatedSettings(value) {
   const languages = ['en', 'ja', 'de', 'fr', 'es', 'it', 'pt', 'zh', 'ko'];

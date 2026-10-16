@@ -22,3 +22,9 @@ export function releaseOverlay(window) {
   setOverlayInput(window, true);
   window.hide();
 }
+export function showStartupOverlay(window, { hidden = false, quitting = false } = {}) {
+  if (hidden || !windowAvailable(window, quitting)) return false;
+  setOverlayInput(window, true);
+  window.showInactive();
+  return true;
+}

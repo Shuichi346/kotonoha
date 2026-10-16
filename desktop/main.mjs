@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defaultSettings, validatedSettings, loadSettings } from './preferences.mjs';
 import { desktopLabels } from './locale.mjs';
-import { windowAvailable, showController, releaseOverlay, setOverlayInput } from './window-actions.mjs';
+import { windowAvailable, showController, releaseOverlay, setOverlayInput, showStartupOverlay } from './window-actions.mjs';
 import { createCaptureActions } from './capture-actions.mjs';
 
 app.setName('kotonoha');
@@ -232,6 +232,10 @@ else {
     ready.promise.catch((error) => { backendError = error.message; statusEvent({ type: 'error', message: error.message }); });
     await controller.loadFile(path.join(here, '../dist/index.html'));
     await overlay.loadFile(path.join(here, '../dist/index.html'), { query: { view: 'subtitles' } });
+    if (!backendError && state === 'stopped' && showStartupOverlay(overlay, { hidden: process.env.KOTONOHA_TEST_HIDDEN === '1', quitting })) {
+      broadcast({ type: 'overlay', visible: true, locked: true });
+      refreshTray();
+    }
   }
   }).catch((error) => {
     releaseOverlay(overlay);

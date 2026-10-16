@@ -6,7 +6,7 @@ import { labels, uiLanguage } from './i18n';
 import { PermissionGuide } from './PermissionGuide';
 const languages = [{ code: 'en', name: 'English' }, { code: 'ja', name: '日本語' }, { code: 'de', name: 'Deutsch' }, { code: 'fr', name: 'Français' }, { code: 'es', name: 'Español' }, { code: 'it', name: 'Italiano' }, { code: 'pt', name: 'Português' }, { code: 'zh', name: '中文' }, { code: 'ko', name: '한국어' }];
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange(value: boolean): void }) {
-  return <label className="toggle-row"><span>{label}</span><input type="checkbox" role="switch" checked={checked} onChange={(event) => onChange(event.target.checked)}/><span className="switch" aria-hidden="true"/></label>;
+  return <div className="toggle-row"><span>{label}</span><input type="checkbox" role="switch" aria-label={label} checked={checked} onChange={(event) => onChange(event.target.checked)}/><span className="switch" aria-hidden="true"/></div>;
 }
 function ModelRow({ title, status, text }: { title: string; status?: ModelStatus; text: ReturnType<typeof labels> }) {
   return <div className="model-row"><span>{title}</span><span className={`model-state ${status?.ready ? 'ready' : ''}`} title={status?.detail}><i/>{status ? status.ready ? text.ready : text.needsSetup : text.unchecked}</span></div>;

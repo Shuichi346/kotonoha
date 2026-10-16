@@ -36,6 +36,8 @@ try {
   assert.deepEqual(result.permissionBridge, ['function', 'function']);
   assert.equal(result.after.state, 'stopped');
   assert.equal(result.before.settings.uiLanguage, 'ja');
+  assert.equal(result.before.settings.fontSize, 30);
+  assert.equal(result.before.settings.showOriginal, false);
   assert.equal(result.before.visible, false);
   assert.equal(result.before.locked, true);
   assert.equal(result.after.settings.uiLanguage, 'en');

@@ -34,9 +34,9 @@ select { width: 100%; padding: 11px 10px; font-size: 13px; color: #242935; borde
 .start { width: 100%; min-height: 47px; }
 .session-status { font-size: 10px; color: #8b909b; min-height: 30px; margin: 9px 0 4px; line-height: 1.6; overflow-wrap: anywhere; }
 .settings-section { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 10px; }
-.toggle-row { position: relative; display: flex; align-items: center; gap: 15px; justify-content: space-between; font-size: 12px; min-height: 43px; cursor: pointer; }
-.toggle-row input { position: absolute; right: 0; opacity: 0; width: 40px; height: 24px; cursor: pointer; }
-.switch { width: 40px; height: 24px; border-radius: 30px; background: #d7dae3; padding: 3px; pointer-events: none; transition: background .18s; }
+.toggle-row { position: relative; display: flex; align-items: center; gap: 15px; justify-content: space-between; font-size: 12px; min-height: 43px; }
+.toggle-row input { position: absolute; right: 0; top: 50%; transform: translateY(-50%); margin: 0; opacity: 0; width: 40px; height: 24px; cursor: pointer; }
+.switch { width: 40px; height: 24px; flex-shrink: 0; border-radius: 30px; background: #d7dae3; padding: 3px; pointer-events: none; transition: background .18s; }
 .switch:after { display: block; content: ''; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px #0002; transition: transform .18s; }
 .toggle-row input:checked + .switch { background: var(--blue); }
 .toggle-row input:checked + .switch:after { transform: translateX(16px); }

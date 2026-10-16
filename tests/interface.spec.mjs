@@ -1,10 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { formatTranscript } from '../desktop/transcript.mjs';
+import { defaultSettings } from '../desktop/preferences.mjs';
 const subtitle = { type: 'subtitle', id: 'test-1', source: 'A bridge between languages.', text: '言葉と言葉をつなぐ架け橋。', start: 0, end: 3, latency_ms: 100 };
 async function bridge(page, initialLatest = null, options = {}) {
-  await page.addInitScript(({ initialLatest, options }) => {
+  await page.addInitScript(({ initialLatest, options, defaultSettings }) => {
     const listeners = new Set();
-    const settings = { source: 'en', target: 'ja', fontSize: 40, showOriginal: true, background: 0, expiry: 12 };
+    const settings = { ...defaultSettings };
     window.testCalls = [];
     window.testPermission = options.permission || 'granted';
     window.testStatusFailure = false;
@@ -35,13 +36,16 @@ async function bridge(page, initialLatest = null, options = {}) {
       export: async (format) => { window.testCalls.push(`export:${format}`); return true; },
       subscribe: (callback) => { listeners.add(callback); return () => listeners.delete(callback); }
     };
-  }, { initialLatest, options });
+  }, { initialLatest, options, defaultSettings });
 }
 
 test('start/stop, language settings, and independent subtitle controls', async ({ page }) => {
   await bridge(page);
   await page.goto('/');
   await expect(page.getByText('準備完了', { exact: true })).toHaveCount(2);
+  await expect(page.getByLabel('字幕の文字サイズ', { exact: true })).toHaveValue('30');
+  await expect(page.getByRole('switch', { name: '字幕ウィンドウを表示', exact: true })).toBeChecked();
+  await expect(page.getByRole('switch', { name: '原文も表示', exact: true })).not.toBeChecked();
   await page.getByLabel('字幕の言語', { exact: true }).selectOption('fr');
   await expect(page.getByLabel('字幕の言語', { exact: true })).toHaveValue('fr');
   await page.getByRole('button', { name: '翻訳を開始', exact: true }).click();
@@ -68,9 +72,14 @@ test('subtitle-only surface is transparent, receives actual events, hides stale 
   expect(await page.locator('.overlay').evaluate((node) => getComputedStyle(node).backgroundColor)).toBe('rgba(220, 224, 230, 0.78)');
   await page.evaluate((value) => window.testEmit({ ...value, receivedAt: Date.now() }), subtitle);
   await expect(page.getByText(subtitle.text, { exact: true })).toBeVisible();
+  await expect(page.getByText(subtitle.source, { exact: true })).toHaveCount(0);
+  await page.evaluate(async () => {
+    const { settings } = await window.kotonoha.snapshot();
+    await window.kotonoha.settings({ ...settings, showOriginal: true });
+  });
   await expect(page.getByText(subtitle.source, { exact: true })).toBeVisible();
   const style = await page.locator('.caption-text').evaluate((node) => ({ color: getComputedStyle(node).color, size: getComputedStyle(node).fontSize, textStroke: getComputedStyle(node).webkitTextStrokeWidth }));
-  expect(style).toEqual({ color: 'rgb(255, 255, 255)', size: '40px', textStroke: '3px' });
+  expect(style).toEqual({ color: 'rgb(255, 255, 255)', size: '30px', textStroke: '3px' });
   await page.evaluate(() => window.kotonoha.lock(true));
   await expect(page.locator('.overlay')).toHaveClass(/is-locked/);
   await expect(page.locator('.overlay-controls')).toBeHidden();
@@ -106,8 +115,8 @@ test('interface language defaults to Japanese and switches independently from su
   await bridge(page);
   await page.goto('/');
   await expect(page.locator('.wordmark')).toHaveText('kotonoha');
-  await expect(page.getByLabel('表示言語', { exact: true })).toHaveValue('ja');
-  await page.getByLabel('表示言語', { exact: true }).selectOption('en');
+  await expect(page.getByLabel('Language', { exact: true })).toHaveValue('ja');
+  await page.getByLabel('Language', { exact: true }).selectOption('en');
   await expect(page.getByRole('button', { name: 'Start translation', exact: true })).toBeVisible();
   await expect(page.getByLabel('Audio language', { exact: true })).toHaveValue('en');
   await expect(page.getByLabel('Subtitle language', { exact: true })).toHaveValue('ja');
@@ -115,7 +124,7 @@ test('interface language defaults to Japanese and switches independently from su
   await expect(page).toHaveTitle('kotonoha — Live subtitle translation');
   await page.getByRole('button', { name: 'History', exact: true }).click();
   await expect(page.getByText('History for this session')).toBeVisible();
-  await page.getByLabel('Interface language', { exact: true }).selectOption('ja');
+  await page.getByLabel('Language', { exact: true }).selectOption('ja');
   await expect(page.getByText('この起動中の履歴', { exact: true })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
 });
@@ -196,7 +205,7 @@ test('deferred or declined permission cannot trigger startup or duplicate prompt
   await expect(guide).toBeVisible();
   expect(await page.evaluate(() => window.testCalls)).toEqual(['permission']);
   await guide.getByRole('button', { name: 'あとで設定する', exact: true }).click();
-  await page.getByLabel('表示言語', { exact: true }).selectOption('en');
+  await page.getByLabel('Language', { exact: true }).selectOption('en');
   await expect(guide).toHaveAccessibleName('Before you start translating');
   await expect(guide).toContainText('Choose “Allow” in macOS');
 });
@@ -236,4 +245,27 @@ test('settings-first setup and failed permission requests retain an explicit pro
   await page.getByRole('button', { name: '翻訳を開始', exact: true }).click();
   await expect(page.getByRole('button', { name: '翻訳を停止', exact: true })).toBeVisible();
   expect(await page.evaluate(() => window.testCalls)).toEqual(['settings', 'permission', 'permission', 'start']);
+});
+
+
+test('switch text and row whitespace do not toggle; switch clicks and keyboard still work', async ({ page }) => {
+  await bridge(page);
+  await page.goto('/');
+  await page.getByText('表示を調整', { exact: true }).click();
+  for (const name of ['字幕ウィンドウを表示', '原文も表示', 'クリックを動画に通す']) {
+    const control = page.getByRole('switch', { name, exact: true });
+    const row = control.locator('..');
+    const initiallyChecked = await control.isChecked();
+    const calls = await page.evaluate(() => [...window.testCalls]);
+    await row.getByText(name, { exact: true }).click();
+    await expect(control).toBeChecked({ checked: initiallyChecked });
+    const bounds = await row.boundingBox();
+    await row.click({ position: { x: bounds.width - 60, y: bounds.height / 2 } });
+    await expect(control).toBeChecked({ checked: initiallyChecked });
+    expect(await page.evaluate(() => window.testCalls)).toEqual(calls);
+    await control.click();
+    await expect(control).toBeChecked({ checked: !initiallyChecked });
+    await control.press('Space');
+    await expect(control).toBeChecked({ checked: initiallyChecked });
+  }
 });

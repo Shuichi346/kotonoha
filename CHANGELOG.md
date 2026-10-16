@@ -13,12 +13,15 @@
 
 ### Changed
 
+- Changed new subtitle defaults to 30 px with original text off, preserved saved preferences, and enabled the locked subtitle window on normal startup.
+- Kept the interface-language selector labeled `Language` in both Japanese and English for discoverability.
 - Renamed the application to kotonoha and retained legacy subtitle preferences without modifying the old profile.
 - Added a persisted Japanese/English interface preference, defaulting to Japanese and independent of translation languages, across windows, menus, and service messages.
 - Replaced the app icon with the supplied cropped emblem, the menu-bar text with a Retina leaf template icon, and the subtitle toolbar gear with sliders.
 
 ### Fixed
 
+- Restricted controller toggle clicks to the switch itself so descriptions and row whitespace no longer change settings; retained keyboard access and accessible names.
 - Replaced raw recording-permission failures with localized setup guidance and blocked model loading/capture until access is confirmed; permission requests no longer start translation.
 - Removed the packaged startup dependency on the protected Documents checkout by staging the local runtime in Application Support.
 - Guarded controller activation after window destruction and during shutdown, and prevented background errors from forcing focus or opening a blocking startup error dialog.
