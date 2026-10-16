@@ -1,0 +1,21 @@
+# Notes
+
+## 2026-10-16
+
+The user watches a video in another app and wants a second app that displays subtitles only. The primary surface is a transparent Electron window. A separate compact control window may be hidden; the menu-bar item and ⌘⇧K restore it. Captions are white with a black outline, not a transcript dashboard. The final concept is the transparent-subtitle variant; the initial dashboard concept was superseded by the user's clarification.
+
+Use Node/Electron/React for the UI, Python/MLX for translation, NeMo-Speech.cpp/Metal for ASR, and a narrow Swift helper for system audio. No virtual audio driver or audio rerouting device is necessary. The `.app` points to this checkout's runtime and models: it is usable locally, but not a portable distribution. Python, NeMo, native helper, MLX, and 33 packaged Mach-O components were inspected for arm64 support.
+
+Verification uses deterministic test runners without AI-driven browser/native interaction or screenshot inspection, per the explicitly invoked preparation skills. Frontend build passed on execution 2 after adding Vite CSS declarations. UI tests passed on execution 3: execution 1 needed the matching Chromium, execution 2 hit macOS sandbox Mach-port denial, execution 3 passed outside the sandbox. These known external prerequisites do not imply an unresolved reasoning issue. Native build passed on execution 3 and its resampler/preflight passed. Do not repeat successful checks without invalidated evidence.
+
+Real inference evidence is documented in backend/README.md. Actual system capture remains unverified by the agent. Native preflight inside the restricted environment reported permission required; preflight from the packaged desktop app reported permission granted. Preserve that distinction: permission checks do not verify audio delivery and never prompt. Model fixture checks do not capture the user's audio. Avoid describing that partial evidence as an end-to-end video capture test.
+
+The packaged desktop smoke passed on execution 3, confirming two windows, renderer IPC, authenticated Python status, prepared models, and zero renderer exceptions. Execution 1 timed out because the ESM entry point waited on app readiness at top level. Execution 2 exposed a test assertion that incorrectly expected alpha from Electron getBackgroundColor(), whose documented return value is RGB only; the final assertion combines the RGB contract with transparent renderer styling. Start window creation from app.whenReady().then(...) so module evaluation can finish. The native capture helper needs its stable signed bundle identity; keep its wrapper and bundle together. Electron launches Python in a dedicated process group so a stalled MLX worker cannot orphan capture/NeMo after quit.
+
+Temporary build artifacts, dependencies, model files, QA output, and downloaded source excerpts are ignored. Transcript history is in memory only. Exported SRT uses an approximate monotonic timeline and is not synchronized with a video file.
+
+A separate real NeMo endpointing acceptance passed on execution 2: a final transcript arrived at audio time 3.3 seconds before any client commit. Execution 1 found that the CLI boolean endpointing flag takes no trailing true value. The runtime now uses the verified syntax. Full model fixture acceptance and the focused endpointing check have separate bounded histories in backend/README.md.
+
+The user subsequently reported on 2026-10-16 that the current app runs comfortably. This is user-reported operational evidence, not an agent-performed test or a measured latency result. No player, language pair, or exhaustive interaction coverage was specified. Preserve the working behavior; this retrospective planning and documentation task makes no product changes and requires no application restart or test rerun.
+
+PLANS.md records the delivered design and is the sole implementation/acceptance tracker. It separates the earlier real-model baseline from the later EOS regression and endpointing acceptance; it must not imply that the full model smoke was repeated after those fixes. Human operation recommendations remain outside required acceptance gates. Future resumption must reuse valid evidence and preserve existing retry counts.

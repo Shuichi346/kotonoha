@@ -1,0 +1,26 @@
+[project]
+name = "real-time-translation"
+version = "0.1.0"
+description = "Apple silicon system audio captions with NeMo and TranslateGemma"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.34,<1",
+  "websockets>=15,<17",
+  "httpx>=0.28,<1",
+  "huggingface-hub>=0.34,<2",
+  "mlx-lm>=0.29.1,<1; sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "pytest-asyncio>=1,<2", "ruff>=0.14,<1"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["backend/tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]

@@ -1,0 +1,36 @@
+{
+  "name": "kotoba-live-subtitles",
+  "productName": "kotoba",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "desktop/main.mjs",
+  "engines": {
+    "node": ">=26.5",
+    "npm": ">=12.0.1"
+  },
+  "scripts": {
+    "build": "node scripts/tasks.mjs build",
+    "build:native": "bash native/build.sh",
+    "prepare:models": "uv run --locked python -m backend.prepare",
+    "start": "npm run build && node scripts/launch.mjs",
+    "dev:web": "vite --host 127.0.0.1",
+    "test": "node scripts/tasks.mjs test",
+    "package": "npm run build && npm run build:native && node scripts/package.mjs",
+    "check:architecture": "node scripts/check-architecture.mjs",
+    "setup:electron": "node scripts/tasks.mjs electron"
+  },
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "@playwright/test": "1.64.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "electron": "44.7.2",
+    "typescript": "7.0.2",
+    "vite": "8.3.4"
+  }
+}

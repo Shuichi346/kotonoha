@@ -1,0 +1,205 @@
+"""Authenticated loopback-only service used by the Electron main process."""
+
+import asyncio
+import contextlib
+import hmac
+import json
+import os
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
+
+from backend.config import CAPTURE, asr_ready, nemo_binary, translation_ready
+from backend.pipeline import LiveSession
+from backend.runtime import NemoRuntime
+from backend.translation import Translator
+
+# Curated transcription-ready and broad-coverage languages exposed by the app.
+SOURCES = {
+    "en",
+    "ja",
+    "de",
+    "es",
+    "fr",
+    "it",
+    "pt",
+    "zh",
+    "ko",
+    "ru",
+    "ar",
+    "hi",
+    "nl",
+    "tr",
+    "vi",
+    "uk",
+    "pl",
+    "sv",
+    "cs",
+    "nb",
+    "da",
+    "bg",
+    "fi",
+    "hr",
+    "sk",
+    "hu",
+    "ro",
+    "et",
+}
+TARGETS = SOURCES | {"ar", "hi", "ru", "nl", "sv", "pl", "tr", "uk", "vi", "th", "id"}
+
+
+class SessionManager:
+    def __init__(self, runtime=None, translator=None):
+        self.runtime = runtime or NemoRuntime()
+        self.translator = translator or Translator()
+        self.session = None
+        self.lock = asyncio.Lock()
+
+    async def start(self, owner, send, source, target):
+        async with self.lock:
+            if self.session and not self.session.task.done():
+                raise ValueError("別の字幕セッションが実行中です。先に停止してください。")
+            self.session = LiveSession(self.runtime, self.translator, send, source, target)
+            self.session.owner = owner
+            self.session.start()
+            return self.session
+
+    async def stop(self, owner):
+        async with self.lock:
+            if self.session and self.session.owner is owner:
+                await self.session.stop()
+                self.session = None
+
+    async def close(self):
+        if self.session:
+            await self.session.stop()
+        await self.runtime.close()
+        self.translator.close()
+
+
+def create_app(token: str | None = None, manager: SessionManager | None = None):
+    secret = token if token is not None else os.environ.get("RT_TOKEN", "")
+    sessions = manager or SessionManager()
+
+    @asynccontextmanager
+    async def lifespan(app):
+        yield
+        await sessions.close()
+
+    app = FastAPI(
+        title="Real-time Translation",
+        lifespan=lifespan,
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+    )
+
+    def authorized(value):
+        return bool(secret) and hmac.compare_digest((value or "").encode(), secret.encode())
+
+    async def capture_status():
+        if not CAPTURE.is_file():
+            return {"ready": False, "detail": "npm run build:native を実行してください。"}
+        process = None
+        try:
+            process = await asyncio.create_subprocess_exec(
+                str(CAPTURE),
+                "--check",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            output, _ = await asyncio.wait_for(process.communicate(), timeout=5)
+            result = json.loads(output)
+            permission = result.get("permission", "unknown")
+            return {
+                "ready": bool(result.get("available")),
+                "permission": permission,
+                "detail": "ScreenCaptureKit · 16 kHz PCM"
+                if result.get("available")
+                else "開始時に画面とシステム音声の許可が必要です。",
+            }
+        except (OSError, ValueError, TimeoutError):
+            return {"ready": False, "detail": "音声キャプチャの状態を取得できません。"}
+        finally:
+            if process and process.returncode is None:
+                process.kill()
+                await process.wait()
+
+    @app.get("/api/status")
+    async def status(authorization: str | None = Header(default=None)):
+        if not (authorization or "").startswith("Bearer ") or not authorized(
+            (authorization or "").removeprefix("Bearer ")
+        ):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        return {
+            "capture": await capture_status(),
+            "asr": {
+                "ready": bool(nemo_binary()) and asr_ready(),
+                "detail": "Nemotron 3.5 · Metal"
+                if nemo_binary() and asr_ready()
+                else "NeMo CLI とモデルが必要です。npm run prepare:models を実行してください。",
+            },
+            "translation": {
+                "ready": translation_ready(),
+                "detail": "TranslateGemma 4B · MLX 4-bit"
+                if translation_ready()
+                else "翻訳モデルがありません。npm run prepare:models を実行してください。",
+            },
+        }
+
+    @app.websocket("/api/live")
+    async def live(socket: WebSocket):
+        if not authorized(socket.query_params.get("token")):
+            await socket.close(code=1008)
+            return
+        await socket.accept()
+        owner = object()
+        send_lock = asyncio.Lock()
+
+        async def send(event):
+            async with send_lock:
+                await socket.send_json(event)
+
+        try:
+            while True:
+                try:
+                    message = await socket.receive_json()
+                    if not isinstance(message, dict):
+                        raise ValueError("JSON オブジェクトを送信してください。")
+                    kind = message.get("type")
+                    if kind == "start":
+                        source, target = message.get("source", "en"), message.get("target", "ja")
+                        if source not in SOURCES or target not in TARGETS:
+                            raise ValueError("対応していない言語です。")
+                        await sessions.start(owner, send, source, target)
+                    elif kind == "stop":
+                        await sessions.stop(owner)
+                    else:
+                        raise ValueError("対応していない操作です。")
+                except (ValueError, TypeError) as error:
+                    await send({"type": "error", "message": str(error)})
+        except (WebSocketDisconnect, RuntimeError):
+            pass
+        finally:
+            with contextlib.suppress(Exception):
+                await sessions.stop(owner)
+
+    return app
+
+
+app = create_app()
+
+
+def main():
+    if not os.environ.get("RT_TOKEN"):
+        raise SystemExit(
+            "RT_TOKEN is required. Launch via the desktop app or set a random bearer token."
+        )
+    import uvicorn
+
+    # Access logs could expose the WebSocket query token; the service never logs requests.
+    uvicorn.run(app, host="127.0.0.1", port=8765, access_log=False, log_level="warning")
+
+
+if __name__ == "__main__":
+    main()
