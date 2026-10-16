@@ -12,6 +12,6 @@ const paths = await packager({
   appVersion: '0.1.0', icon: 'assets/kotonoha.icns', overwrite: true, asar: true,
   ignore: [/^\/(backend|native|models|\.venv|\.git|\.scratch|tests|scripts|frontend|release)(\/|$)/, /uv.lock/, /pyproject.toml/],
   extraResource: ['.scratch/runtime.json'],
-  extendInfo: { LSMinimumSystemVersion: '26.0', NSAudioCaptureUsageDescription: '再生中の音声をこのMacで文字起こしし、翻訳字幕を表示します。', NSScreenCaptureUsageDescription: 'システム音声を取得して翻訳字幕を表示します。' }
+  extendInfo: { LSMinimumSystemVersion: '26.0', LSUIElement: false, LSBackgroundOnly: false, NSAudioCaptureUsageDescription: '再生中の音声をこのMacで文字起こしし、翻訳字幕を表示します。', NSScreenCaptureUsageDescription: 'システム音声を取得して翻訳字幕を表示します。' }
 });
 console.log(paths.join('\n'));

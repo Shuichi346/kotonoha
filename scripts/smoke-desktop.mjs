@@ -13,6 +13,18 @@ try {
   desktop.on('window', (page) => page.on('pageerror', (error) => errors.push(error.message)));
   const controller = await desktop.firstWindow();
   await controller.waitForFunction(() => !!window.kotonoha);
+  const presentation = await desktop.evaluate(({ BrowserWindow, app, screen }) => {
+    const windows = BrowserWindow.getAllWindows();
+    const controls = windows.find((win) => !win.isAlwaysOnTop());
+    const captions = windows.find((win) => win.isAlwaysOnTop());
+    return { controller: controls.getBounds(), overlay: captions.getBounds(), area: screen.getPrimaryDisplay().workArea, focusable: controls.isFocusable(), dock: app.dock.isVisible() };
+  });
+  assert.equal(presentation.dock, true);
+  assert.equal(presentation.focusable, true);
+  assert(presentation.controller.width <= 480 && presentation.controller.height <= 640);
+  assert(presentation.controller.y + presentation.controller.height + 16 <= presentation.overlay.y);
+  assert(presentation.controller.y >= presentation.area.y);
+  assert(presentation.controller.x >= presentation.area.x);
   const inputBefore = await desktop.evaluate(({ BrowserWindow }) => {
     const overlay = BrowserWindow.getAllWindows().find((win) => win.isAlwaysOnTop());
     globalThis.overlayMouseCalls = [];
@@ -74,7 +86,7 @@ try {
     return { overlayVisible: windows.find((win) => win.isAlwaysOnTop()).isVisible() };
   });
   assert.equal(safety.overlayVisible, false);
-  console.log(JSON.stringify({ passed: true, windows: windows.length, asr: result.status.asr.ready, translation: result.status.translation.ready, capture: result.status.capture, ipc: 'authenticated backend and independent overlay', rendererErrors: errors.length }));
+  console.log(JSON.stringify({ passed: true, windows: windows.length, presentation, asr: result.status.asr.ready, translation: result.status.translation.ready, capture: result.status.capture, ipc: 'authenticated backend and independent overlay', rendererErrors: errors.length }));
 } finally {
   await desktop?.close();
   clearTimeout(timeout);

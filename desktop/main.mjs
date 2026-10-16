@@ -8,6 +8,7 @@ import { defaultSettings, validatedSettings, loadSettings } from './preferences.
 import { desktopLabels } from './locale.mjs';
 import { windowAvailable, showController, releaseOverlay, setOverlayInput, showStartupOverlay } from './window-actions.mjs';
 import { createCaptureActions } from './capture-actions.mjs';
+import { startupWindowLayout } from './window-layout.mjs';
 
 app.setName('kotonoha');
 if (process.env.KOTONOHA_TEST_PROFILE) app.setPath('userData', process.env.KOTONOHA_TEST_PROFILE);
@@ -63,7 +64,7 @@ function secureWindow(win) {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event) => event.preventDefault());
 }
-function openController() { return showController(controller, { quitting }); }
+function openController() { return showController(controller, { quitting, application: app }); }
 function setLocked(value) {
   if (!windowAvailable(overlay, quitting)) return;
   locked = !!value;
@@ -167,15 +168,17 @@ else {
   void app.whenReady().then(async () => {
   if (process.arch !== 'arm64') { dialog.showErrorBox(text().appleTitle, text().appleMessage); app.quit(); }
   else {
+    app.setActivationPolicy('regular');
+    await app.dock?.show();
     app.dock?.setIcon(path.join(here, '../assets/kotonoha.png'));
     app.setAboutPanelOptions({ applicationName: 'kotonoha', iconPath: path.join(here, '../assets/kotonoha.png') });
     preferencesPath = path.join(app.getPath('userData'), 'settings.json');
     const legacy = process.env.KOTONOHA_TEST_PROFILE ? [] : ['kotoba', 'kotoba-live-subtitles'].map((name) => path.join(app.getPath('appData'), name, 'settings.json'));
     settings = loadSettings(preferencesPath, legacy);
-    controller = new BrowserWindow({ show: process.env.KOTONOHA_TEST_HIDDEN !== '1', width: 510, height: 850, minWidth: 450, minHeight: 680, title: 'kotonoha', titleBarStyle: 'hiddenInset', backgroundColor: '#ffffff', webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
     const area = screen.getPrimaryDisplay().workArea;
-    const width = Math.min(1100, area.width - 48);
-    overlay = new BrowserWindow({ width, height: 240, minWidth: 420, minHeight: 140, x: area.x + Math.round((area.width - width) / 2), y: area.y + area.height - 280, show: false, focusable: false, frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: false, resizable: true, alwaysOnTop: true, skipTaskbar: true, title: text().subtitleTitle, webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
+    const layout = startupWindowLayout(area);
+    controller = new BrowserWindow({ show: process.env.KOTONOHA_TEST_HIDDEN !== '1', ...layout.controller, focusable: true, skipTaskbar: false, title: 'kotonoha', titleBarStyle: 'hiddenInset', backgroundColor: '#ffffff', webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
+    overlay = new BrowserWindow({ ...layout.overlay, minWidth: 420, minHeight: 140, show: false, focusable: false, frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: false, resizable: true, alwaysOnTop: true, skipTaskbar: true, title: text().subtitleTitle, webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
     overlay.setAlwaysOnTop(true, 'floating');
     setOverlayInput(overlay, true);
     overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });

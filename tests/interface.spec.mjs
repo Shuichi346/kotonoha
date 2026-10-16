@@ -269,3 +269,18 @@ test('switch text and row whitespace do not toggle; switch clicks and keyboard s
     await expect(control).toBeChecked({ checked: initiallyChecked });
   }
 });
+
+test('compact controller keeps primary controls usable and lower settings reachable by scrolling', async ({ page }) => {
+  await page.setViewportSize({ width: 480, height: 600 });
+  await bridge(page);
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: '翻訳を開始', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Language', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole('switch', { name: '原文も表示', exact: true }).check();
+  await expect(page.getByRole('switch', { name: '原文も表示', exact: true })).toBeChecked();
+  await page.getByText('ローカルモデル', { exact: true }).scrollIntoViewIfNeeded();
+  await expect(page.getByText('TranslateGemma 4B', { exact: true })).toBeVisible();
+  await page.getByLabel('Language', { exact: true }).selectOption('en');
+  await expect(page.getByRole('button', { name: 'Start translation', exact: true })).toBeVisible();
+});

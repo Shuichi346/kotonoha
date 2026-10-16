@@ -1,11 +1,12 @@
 export function windowAvailable(window, quitting = false) {
   return !quitting && !!window && !window.isDestroyed();
 }
-export function showController(window, { quitting = false, focus = true } = {}) {
+export function showController(window, { quitting = false, focus = true, application } = {}) {
   if (!windowAvailable(window, quitting)) return false;
   if (focus) {
     if (window.isMinimized()) window.restore();
     window.show();
+    application?.focus();
     window.focus();
   } else window.showInactive();
   return true;

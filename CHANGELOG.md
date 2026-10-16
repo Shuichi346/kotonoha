@@ -13,6 +13,8 @@
 
 ### Changed
 
+- Reduced the initial controller to at most 480×640 and placed it in a separate band above subtitles, adapting to the display work area.
+- Explicitly enabled regular macOS Dock/menu behavior and application activation when restoring controls through a user action.
 - Changed new subtitle defaults to 30 px with original text off, preserved saved preferences, and enabled the locked subtitle window on normal startup.
 - Kept the interface-language selector labeled `Language` in both Japanese and English for discoverability.
 - Renamed the application to kotonoha and retained legacy subtitle preferences without modifying the old profile.

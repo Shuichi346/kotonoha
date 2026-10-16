@@ -142,3 +142,46 @@ test('startup subtitles are visible without taking focus and remain locked; hidd
   assert.equal(showStartupOverlay(window), true);
   assert.deepEqual(calls, [['focusable', false], ['ignore', true], ['showInactive']]);
 });
+
+test('startup windows fit the work area and keep a separate band for subtitles', async () => {
+  const { startupWindowLayout } = await import('../desktop/window-layout.mjs');
+  for (const area of [
+    { x: 0, y: 25, width: 1440, height: 850 },
+    { x: 0, y: 25, width: 1920, height: 1010 },
+    { x: 0, y: 24, width: 1024, height: 704 },
+    { x: 0, y: 0, width: 800, height: 600 },
+    { x: -1080, y: -120, width: 1080, height: 1800 },
+  ]) {
+    const { controller, overlay } = startupWindowLayout(area);
+    assert(controller.width <= 480 && controller.height <= 640);
+    assert(controller.minHeight <= controller.height && controller.minWidth <= controller.width);
+    assert(controller.y + controller.height + 16 <= overlay.y);
+    for (const bounds of [controller, overlay]) {
+      assert(bounds.x >= area.x && bounds.y >= area.y);
+      assert(bounds.x + bounds.width <= area.x + area.width);
+      assert(bounds.y + bounds.height <= area.y + area.height);
+    }
+  }
+});
+
+test('explicit controller restoration activates the app, while background errors never do', async () => {
+  const { showController } = await import('../desktop/window-actions.mjs');
+  const calls = [];
+  const application = { focus: () => calls.push('app.focus') };
+  const window = {
+    isDestroyed: () => false,
+    isMinimized: () => true,
+    restore: () => calls.push('restore'),
+    show: () => calls.push('show'),
+    focus: () => calls.push('window.focus'),
+    showInactive: () => calls.push('inactive'),
+  };
+  showController(window, { application, focus: false });
+  assert.deepEqual(calls, ['inactive']);
+  calls.length = 0;
+  showController(window, { application });
+  assert.deepEqual(calls, ['restore', 'show', 'app.focus', 'window.focus']);
+  calls.length = 0;
+  showController(window, { application, quitting: true });
+  assert.deepEqual(calls, []);
+});
