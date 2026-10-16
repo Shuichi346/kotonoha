@@ -7,7 +7,7 @@ async function bridge(page, initialLatest = null) {
     const settings = { source: 'en', target: 'ja', fontSize: 40, showOriginal: true, background: 0, expiry: 12 };
     window.testCalls = [];
     window.testEmit = (event) => listeners.forEach((fn) => fn(event));
-    window.kotoba = {
+    window.kotonoha = {
       snapshot: async () => ({ settings, state: 'stopped', latest: initialLatest, history: [], visible: true, locked: false }),
       status: async () => ({ capture: { ready: false, detail: 'macOS permission required' }, asr: { ready: true, detail: 'Ready' }, translation: { ready: true, detail: 'Ready' } }),
       settings: async (value) => { Object.assign(settings, value); window.testEmit({ type: 'settings', settings: value }); return value; },
@@ -77,4 +77,37 @@ test('transcript exports retain every translation and valid monotonic timings', 
   const values = [{ ...subtitle, receivedAt: 1000 }, { ...subtitle, id: '2', start: 0, end: 2, receivedAt: 2000 }];
   expect(formatTranscript(values, 'srt')).toBe('1\n00:00:00,000 --> 00:00:03,000\n言葉と言葉をつなぐ架け橋。\n\n2\n00:00:03,000 --> 00:00:05,000\n言葉と言葉をつなぐ架け橋。\n');
   expect(formatTranscript(values, 'txt')).toContain(subtitle.source);
+});
+
+test('interface language defaults to Japanese and switches independently from subtitle languages', async ({ page }) => {
+  await bridge(page);
+  await page.goto('/');
+  await expect(page.locator('.wordmark')).toHaveText('kotonoha');
+  await expect(page.getByLabel('表示言語', { exact: true })).toHaveValue('ja');
+  await page.getByLabel('表示言語', { exact: true }).selectOption('en');
+  await expect(page.getByRole('button', { name: 'Start translation', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Audio language', { exact: true })).toHaveValue('en');
+  await expect(page.getByLabel('Subtitle language', { exact: true })).toHaveValue('ja');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await expect(page).toHaveTitle('kotonoha — Live subtitle translation');
+  await page.getByRole('button', { name: 'History', exact: true }).click();
+  await expect(page.getByText('History for this session')).toBeVisible();
+  await page.getByLabel('Interface language', { exact: true }).selectOption('ja');
+  await expect(page.getByText('この起動中の履歴', { exact: true })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
+});
+
+test('subtitle toolbar follows interface language while retaining subtitle content', async ({ page }) => {
+  await bridge(page);
+  await page.goto('/?view=subtitles');
+  await page.evaluate((value) => window.testEmit({ ...value, receivedAt: Date.now() }), subtitle);
+  await page.evaluate(async () => {
+    const { settings } = await window.kotonoha.snapshot();
+    await window.kotonoha.settings({ ...settings, uiLanguage: 'en' });
+  });
+  await expect(page.getByRole('main')).toHaveAttribute('aria-label', 'Subtitle window');
+  await expect(page.getByRole('button', { name: 'Show controls', exact: true })).toHaveAttribute('title', 'Show controls (⌘⇧K)');
+  await expect(page.getByText(subtitle.text, { exact: true })).toBeVisible();
+  await expect(page.locator('.overlay-controls button').first().locator('circle')).toHaveCount(0);
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
 });

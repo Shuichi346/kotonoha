@@ -1,4 +1,4 @@
-export type Settings = { source: string; target: string; fontSize: number; showOriginal: boolean; background: number; expiry: number };
+export type Settings = { source: string; target: string; uiLanguage: 'ja' | 'en'; fontSize: number; showOriginal: boolean; background: number; expiry: number };
 export type SessionState = 'starting' | 'listening' | 'stopping' | 'stopped';
 export type Subtitle = { type: 'subtitle'; id: string; source: string; text: string; start: number; end: number; latency_ms: number; receivedAt: number };
 export type ModelStatus = { ready: boolean; detail: string };
@@ -18,4 +18,4 @@ export interface Bridge {
   export(format: 'srt' | 'txt'): Promise<boolean>;
   subscribe(callback: (event: LiveEvent) => void): () => void;
 }
-declare global { interface Window { kotoba?: Bridge } }
+declare global { interface Window { kotonoha?: Bridge } }

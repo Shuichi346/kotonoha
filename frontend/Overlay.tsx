@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Icon } from './icons';
+import { labels } from './i18n';
 import type { Live } from './useLive';
 export function Overlay({ live }: { live: Live }) {
   const { latest, settings, state, locked } = live;
+  const text = labels(settings.uiLanguage);
   const [fresh, setFresh] = useState(false);
   useEffect(() => {
     if (!latest) { setFresh(false); return; }
@@ -11,12 +13,12 @@ export function Overlay({ live }: { live: Live }) {
     const timer = setTimeout(() => setFresh(false), Math.max(0, remaining));
     return () => clearTimeout(timer);
   }, [latest, settings.expiry]);
-  return <main className={`overlay ${locked ? 'is-locked' : ''}`} aria-label="字幕ウィンドウ">
+  return <main className={`overlay ${locked ? 'is-locked' : ''}`} aria-label={text.overlay}>
     <div className="overlay-controls">
-      <span className="drag-handle" title="ドラッグして字幕を移動"><Icon name="drag"/></span>
-      <button title="操作画面を表示 (⌘⇧K)" aria-label="操作画面を表示" onClick={() => window.kotoba?.showController()}><Icon name="settings"/></button>
-      <button title="クリックを透過 (⌘⇧Lで解除)" aria-label="字幕へのクリックを透過" onClick={() => window.kotoba?.lock(true)}><Icon name="lock"/></button>
-      <button title="字幕を隠す" aria-label="字幕を隠す" onClick={() => window.kotoba?.overlay(false)}><Icon name="close"/></button>
+      <span className="drag-handle" title={text.drag}><Icon name="drag"/></span>
+      <button title={text.showControllerTitle} aria-label={text.showController} onClick={() => window.kotonoha?.showController()}><Icon name="settings"/></button>
+      <button title={text.lockOverlayTitle} aria-label={text.lockOverlay} onClick={() => window.kotonoha?.lock(true)}><Icon name="lock"/></button>
+      <button title={text.hideOverlay} aria-label={text.hideOverlay} onClick={() => window.kotonoha?.overlay(false)}><Icon name="close"/></button>
     </div>
     <div className="caption-area" aria-live="polite" aria-atomic="true" style={{ fontSize: settings.fontSize }}>
       {fresh && latest ? <div className="caption-lines" style={{ backgroundColor: `rgba(0,0,0,${settings.background})` }}>
@@ -24,7 +26,7 @@ export function Overlay({ live }: { live: Live }) {
         <p className="caption-text">{latest.text}</p>
       </div> : null}
     </div>
-    {!fresh ? <div className="overlay-hint">{state === 'listening' ? '音声を待っています' : 'ここに翻訳字幕が表示されます'}<span>ドラッグで移動 · ⌘⇧Kで操作画面</span></div> : null}
+    {!fresh ? <div className="overlay-hint">{state === 'listening' ? text.waitingForAudio : text.overlayEmpty}<span>{text.overlayHint}</span></div> : null}
     <div className="resize-corner" aria-hidden="true"/>
   </main>;
 }

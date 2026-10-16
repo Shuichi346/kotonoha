@@ -83,3 +83,6 @@ footer { display: flex; justify-content: center; align-items: center; gap: 8px; 
 .resize-corner { position: absolute; bottom: 5px; right: 5px; width: 12px; height: 12px; border-right: 2px solid #ffffff80; border-bottom: 2px solid #ffffff80; opacity: 0; }.overlay:hover .resize-corner { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { *, *:before, *:after { transition: none !important; } }
 @media (max-width: 460px) { .control-body { padding-left: 20px; padding-right: 20px; } h1 { font-size: 22px; }.titlebar-caption { display: none; } }
+
+.interface-language { display: flex; align-items: center; justify-content: flex-end; gap: 10px; color: var(--muted); font-size: 11px; margin: 0 0 19px; }
+.interface-language select { width: 112px; padding: 7px 9px; font-size: 11px; }

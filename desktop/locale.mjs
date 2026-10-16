@@ -1,0 +1,29 @@
+const ja = {
+  subtitleTitle: 'kotonoha — 字幕', tagline: 'kotonoha — ライブ字幕翻訳',
+  showControls: '操作画面を表示', showSubtitles: '字幕を表示', clickThrough: '字幕へのクリックを透過', stop: '翻訳を停止', quit: 'kotonohaを終了',
+  about: 'kotonohaについて', toggleClickThrough: '字幕へのクリック透過を切り替え',
+  edit: '編集', undo: '取り消す', redo: 'やり直す', cut: '切り取り', copy: 'コピー', paste: '貼り付け', selectAll: 'すべてを選択',
+  window: 'ウィンドウ', minimize: 'しまう', zoom: '拡大／縮小', bringAllToFront: 'すべてを手前に移動',
+  appleTitle: 'Apple Siliconが必要です', appleMessage: 'kotonohaはarm64専用です。', startup: 'kotonohaを起動できません',
+  languagePair: '翻訳元と翻訳先に異なる言語を選んでください。', settingsRange: '字幕設定が範囲外です。',
+  backendExited: 'Pythonバックエンドが終了しました。', portBusy: '音声サービスのポートが使用中です。起動中の旧版アプリを終了してから、kotonohaを再起動してください。',
+  pythonStartup: 'Pythonの起動を確認できません。uv syncを実行してください。', socketTimeout: '音声サービスへの接続がタイムアウトしました。',
+  socketError: '音声サービスに接続できません。', invalidResponse: '音声サービスから不正な応答が届きました。',
+  disconnected: '音声サービスとの接続が切れました。翻訳を再開してください。', readiness: '準備状況を取得できません',
+  pythonStopped: 'Pythonサービスが終了しました。アプリを再起動してください。', missingPython: 'Python環境がありません。プロジェクトで uv sync を実行してください。',
+};
+const en = {
+  subtitleTitle: 'kotonoha — Subtitles', tagline: 'kotonoha — Live subtitle translation',
+  showControls: 'Show controls', showSubtitles: 'Show subtitles', clickThrough: 'Pass clicks through subtitles', stop: 'Stop translation', quit: 'Quit kotonoha',
+  about: 'About kotonoha', toggleClickThrough: 'Toggle subtitle click-through',
+  edit: 'Edit', undo: 'Undo', redo: 'Redo', cut: 'Cut', copy: 'Copy', paste: 'Paste', selectAll: 'Select All',
+  window: 'Window', minimize: 'Minimize', zoom: 'Zoom', bringAllToFront: 'Bring All to Front',
+  appleTitle: 'Apple Silicon required', appleMessage: 'kotonoha requires arm64.', startup: 'Unable to start kotonoha',
+  languagePair: 'Select different audio and subtitle languages.', settingsRange: 'Subtitle settings are outside the supported range.',
+  backendExited: 'The Python backend exited.', portBusy: 'The audio service port is in use. Quit the previous app, then restart kotonoha.',
+  pythonStartup: 'Unable to start Python. Run uv sync in the project.', socketTimeout: 'Connecting to the audio service timed out.',
+  socketError: 'Unable to connect to the audio service.', invalidResponse: 'The audio service returned an invalid response.',
+  disconnected: 'The audio service disconnected. Start translation again.', readiness: 'Unable to check readiness',
+  pythonStopped: 'The Python service stopped. Restart the app.', missingPython: 'The Python environment is missing. Run uv sync in the project.',
+};
+export function desktopLabels(language) { return language === 'en' ? en : ja; }

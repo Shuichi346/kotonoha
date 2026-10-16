@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 
 from backend.config import CAPTURE, asr_ready, nemo_binary, translation_ready
+from backend.messages import header_language, localize, localize_event, ui_language
 from backend.pipeline import LiveSession
 from backend.runtime import NemoRuntime
 from backend.translation import Translator
@@ -87,7 +88,7 @@ def create_app(token: str | None = None, manager: SessionManager | None = None):
         await sessions.close()
 
     app = FastAPI(
-        title="Real-time Translation",
+        title="kotonoha",
         lifespan=lifespan,
         docs_url=None,
         redoc_url=None,
@@ -126,12 +127,15 @@ def create_app(token: str | None = None, manager: SessionManager | None = None):
                 await process.wait()
 
     @app.get("/api/status")
-    async def status(authorization: str | None = Header(default=None)):
+    async def status(
+        authorization: str | None = Header(default=None),
+        accept_language: str | None = Header(default=None),
+    ):
         if not (authorization or "").startswith("Bearer ") or not authorized(
             (authorization or "").removeprefix("Bearer ")
         ):
             raise HTTPException(status_code=401, detail="Unauthorized")
-        return {
+        result = {
             "capture": await capture_status(),
             "asr": {
                 "ready": bool(nemo_binary()) and asr_ready(),
@@ -146,6 +150,10 @@ def create_app(token: str | None = None, manager: SessionManager | None = None):
                 else "翻訳モデルがありません。npm run prepare:models を実行してください。",
             },
         }
+        language = header_language(accept_language)
+        for component in result.values():
+            component["detail"] = localize(component["detail"], language)
+        return result
 
     @app.websocket("/api/live")
     async def live(socket: WebSocket):
@@ -155,10 +163,11 @@ def create_app(token: str | None = None, manager: SessionManager | None = None):
         await socket.accept()
         owner = object()
         send_lock = asyncio.Lock()
+        language = "ja"
 
-        async def send(event):
+        async def send(event, selected_language=None):
             async with send_lock:
-                await socket.send_json(event)
+                await socket.send_json(localize_event(event, selected_language or language))
 
         try:
             while True:
@@ -168,10 +177,13 @@ def create_app(token: str | None = None, manager: SessionManager | None = None):
                         raise ValueError("JSON オブジェクトを送信してください。")
                     kind = message.get("type")
                     if kind == "start":
+                        language = ui_language(message.get("ui_language"))
                         source, target = message.get("source", "en"), message.get("target", "ja")
                         if source not in SOURCES or target not in TARGETS:
                             raise ValueError("対応していない言語です。")
                         await sessions.start(owner, send, source, target)
+                    elif kind == "ui_language":
+                        language = ui_language(message.get("ui_language"))
                     elif kind == "stop":
                         await sessions.stop(owner)
                     else:
@@ -198,7 +210,10 @@ def main():
     import uvicorn
 
     # Access logs could expose the WebSocket query token; the service never logs requests.
-    uvicorn.run(app, host="127.0.0.1", port=8765, access_log=False, log_level="warning")
+    port = int(os.environ.get("RT_PORT", "8765"))
+    if port not in {8765, 8767}:
+        raise SystemExit("Unsupported local service port")
+    uvicorn.run(app, host="127.0.0.1", port=port, access_log=False, log_level="warning")
 
 
 if __name__ == "__main__":

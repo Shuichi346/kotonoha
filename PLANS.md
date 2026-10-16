@@ -1,8 +1,8 @@
-# kotoba Implementation Plan
+# kotonoha Implementation Plan
 
 ## Progress Status
 
-This is the single authoritative implementation and acceptance checklist. It was written retrospectively on 2026-10-16 after implementation, then reconciled with the working tree and existing session evidence. Checked items represent completed work or explicitly described evidence; writing this plan does not itself establish a test pass. No product changes or test reruns are requested by this documentation task.
+This is the single authoritative implementation and acceptance checklist. The original implementation was documented retrospectively on 2026-10-16. P1–D1 retain its baseline evidence; R1–RD1 track the subsequent user-requested kotonoha branding and interface-language update. Checked items represent completed work or the explicitly described evidence, not a test pass inferred from writing this plan.
 
 - [x] P1 — Reconcile the requested product, architecture, existing implementation, and acceptance evidence.
 - [x] I1 — Establish the Node.js and Python environments and committed lockfiles.
@@ -21,25 +21,50 @@ This is the single authoritative implementation and acceptance checklist. It was
 - [x] V8 — The packaged application and native runtime components support arm64.
 - [x] D1 — Finish repository documentation updates and review documentation consistency.
 
+- [x] R1 — Rename the app, preserve legacy preferences, and localize desktop controls.
+- [x] R2 — Finish Japanese/English interface and backend message localization (Japanese default).
+- [x] R3 — Crop the supplied artwork, install app/menu-bar icons, and replace the subtitle settings glyph.
+- [x] RV1 — Pass affected frontend build, desktop preference tests, and scripted locale/overlay tests.
+- [x] RV2 — Pass backend locale regressions and Ruff checks without changing inference behavior.
+- [x] RV3 — Package kotonoha for arm64 and verify icon resources, architecture, localized IPC, and isolated startup.
+- [x] RD1 — Update documentation and record final evidence.
+
+- [x] M1 — Remove duplicate Retina scaling and regenerate the menu template assets.
+- [x] MV1 — Verify point/pixel dimensions, transparent margins, and 1x/2x silhouette agreement.
+- [x] MP1 — Create a corrected app build and verify its archived template assets.
+- [x] MD1 — Record the root cause and corrected verification evidence.
+
 Current: Complete
 Next: None
 
 Save this tracker after each implementation step or independent verification unit. Show the full checklist at execution start, phase boundaries, and completion; use changed lines with Current/Next for ordinary updates, unless the user requests shorter reporting. Do not create a second checklist in another file. Narrative rationale belongs in NOTES.md and component documentation.
 
+## Branding and Interface-Language Update — 2026-10-16
+
+The user requested the name **kotonoha**, a Japanese/English interface with Japanese as default, the supplied cropped emblem as the app icon, a proper menu-bar icon, and a replacement for the flower-like subtitle settings glyph. Preserve the working translation pipeline and the independent transparent subtitle window.
+
+R1 changes package/display/export names and Electron resources, migrates settings from the old kotoba profile without deleting or overwriting it, and localizes menus, errors, and titles. R2 adds a persisted `uiLanguage` preference independent from source/target languages, localizes the React views and backend status/errors, and propagates language changes immediately. R3 adds artwork-derived PNG/ICNS assets, a monochrome leaf template image with Retina representation, and a sliders glyph for subtitle settings. Dependencies: R1/R2 proceed together; R3 is independent; package verification follows all three.
+
+Keep the already running app available. The new artifact is `release/kotonoha-darwin-arm64/kotonoha.app`; preserve the previous generated build. Desktop tests use an isolated temporary profile and backend port 8767 and do not start capture. Keep the native helper's bundle identity for existing recording permissions. No app notarization or inference changes are introduced.
+
+The earlier V1–V8 checkboxes are historical baseline evidence. The affected behavior is accepted by the new RV units, with at most three executions per unit (initial plus two focused repairs), counted across this interruption. No new checks were executed before this resume. Current evidence: build, three desktop preference tests, six UI tests, and ten backend tests passed on their first executions; backend Ruff lint passed on execution 2 after bilingual dictionary line wrapping, and Ruff format passed. Icon conversion passed on execution 2 after allowing the standard macOS converter outside the restrictive sandbox. The new package, architecture inspection, and isolated desktop smoke passed on their first executions; native menu language, persisted UI preference, model readiness, transparent captions, and zero renderer errors were verified. The packaged icon hash matches the supplied-artwork-derived ICNS, and the isolated backend exited cleanly. RV1 uses `npm run build` (30 seconds per stage), `node --test tests/desktop.test.mjs` (30-second outer limit), and `npm test` (90-second suite limit). RV2 uses the existing pytest (60 seconds) and Ruff lint/format commands (30 seconds each), plus focused locale tests. RV3 packages with `node scripts/package.mjs` (120-second outer limit), inspects ICNS/PNG/template files and arm64 components (30 seconds), and runs `node scripts/smoke-desktop.mjs` (45 seconds). These limits apply to distinct existing checks; do not rename failures to reset retries. Reuse native DSP and model-inference evidence because their code is unchanged. Stop once affected checks pass. No AI-driven computer-use or screenshot inspection, and no real capture during checks.
+
+Recommended operation checks after completion, not agent-run gates: open kotonoha, change interface language and relaunch to confirm persistence, and inspect the new Dock/menu-bar icons and subtitle toolbar. Model output language must still follow the source/target selections. Update repository documentation after implementation; no user-operated check is required to finish coding.
+
 ## Outcome and Scope
 
-The user watches a video in its existing application while kotoba displays translated subtitles in an independent window on the same display. The subtitle surface must look like subtitles: transparent canvas, outlined white text, and controls visible only during interaction. The user can place it above the video or elsewhere on the display, keep it above other applications, resize it, and hide the separate controller.
+The user watches a video in its existing application while kotonoha displays translated subtitles in an independent window on the same display. The subtitle surface must look like subtitles: transparent canvas, outlined white text, and controls visible only during interaction. The user can place it above the video or elsewhere on the display, keep it above other applications, resize it, and hide the separate controller.
 
 Explicit requirements are Mac system-output input, translated subtitle output, the requested TranslateGemma and Nemotron models, and a subtitle-only window that coexists with the video application. The selected implementation uses Node.js/Electron/React for the interface, Python for model orchestration and translation, NeMo-Speech.cpp for ASR, and a narrow Swift helper for system audio. Local inference, permission-aware startup, and bounded processing are implementation decisions supporting that workflow.
 
 Target Apple silicon only: macOS 26+, arm64 execution, no Intel builds, universal app distributions, Rosetta workflows, or Intel compatibility testing. Use native arm64-compatible runtimes and helpers. A dependency requiring Intel execution is a blocker.
 
-The delivered app is a local development build linked to this checkout's Python environment and models. A portable installer, Developer ID distribution, notarization, video embedding, microphone transcription, cloud services, and automatic recording are outside this implementation. No numerical latency or translation-quality guarantee was established. The user reported on 2026-10-16 that the current app runs comfortably; preserve the working application while maintaining its documentation.
+The delivered app is a local development build linked to this checkout's Python environment and models. A portable installer, Developer ID distribution, notarization, video embedding, microphone transcription, cloud services, and automatic recording are outside this implementation. No numerical latency or translation-quality guarantee was established. The user reported on 2026-10-16 that the current app runs comfortably; preserve that working behavior while applying the requested branding and language improvements.
 
 ## Existing System and Evidence
 
 - Repository root: `/Users/shuichi/Documents/GitHub/Real-time-translation`.
-- App artifact: `release/kotoba-darwin-arm64/kotoba.app`.
+- App artifact: `release/kotonoha-darwin-arm64/kotonoha.app`.
 - Node.js 26.10.0 and npm 12.2.0 were observed during implementation. The manifest requires Node.js >=26.5 and npm >=12.0.1, with project-local engine enforcement.
 - Python 3.13.11 is managed by uv in `.venv`; `pyproject.toml`, `.python-version`, and `uv.lock` define the Python environment.
 - The implementation uses Electron 44.7.2, React 19.3.1, Vite 8.3.4, TypeScript 7.0.2, and Playwright 1.64.1. The Python evidence records mlx-lm 0.32.1 and MLX 0.32.4. The installed arm64 NeMo CLI is 0.2.0.
@@ -91,7 +116,7 @@ These are the dependency-ordered construction steps for the delivered solution. 
 | I3 | Local inference: backend/config.py, prepare.py, runtime.py, translation.py, pipeline.py, app.py | Prepare both models; implement authenticated streaming, exclusive session ownership, endpointing, bounded translation, and final flush. | I1, I2 | V3, V5, V6, and status evidence in V7. |
 | I4 | Subtitle and controller UI: frontend/, desktop/preload.cjs | Render independently from video applications; implement transparent captions, separate controls, settings, history, and exports without sample text pretending to be inference. | I1 | V1/V2 and the window/IPC evidence in V7. |
 | I5 | Desktop lifecycle: desktop/main.mjs, desktop/transcript.mjs | Own windows, authenticated services, shortcuts, validated IPC, persistence, errors, and process-group cleanup. | I2, I3, I4 | V2/V3 cover their respective contracts; V7 covers packaged integration and shutdown. |
-| I6 | Local app: scripts/package.mjs, scripts/launch.mjs, release/kotoba-darwin-arm64/kotoba.app | Build for arm64, preserve runtime.json linkage, and document the local-development distribution boundary. | I5 | Existing package artifact, V7, and V8. |
+| I6 | Local app: scripts/package.mjs, scripts/launch.mjs, release/kotonoha-darwin-arm64/kotonoha.app | Build for arm64, preserve runtime.json linkage, and document the local-development distribution boundary. | I5 | Existing package artifact, V7, and V8. |
 
 No destructive migration is involved. Preserve unrelated files and the currently working app. If runtime.json points to a moved checkout, inspect the path before rebuilding; do not delete models or environments as a speculative fix. Permission errors require their actual OS remedy. Packaging overwrites the generated local app, so do not rebuild it during this documentation-only task or while it is being used.
 
@@ -111,7 +136,7 @@ All commands below already exist. For commands without an internal deadline, use
 | V8 | `npm run check:architecture` | Packaged app, native helper, Python and MLX environment, installed NeMo; 30-second outer limit. | Passed: arm64 available in 33 inspected Mach-O components and in Python/NeMo. Packaging targets only darwin arm64; do not add Intel execution paths. |
 | D1 | Review documentation changes, validate local references/manifest command names and tracker IDs, and run `git diff --check` | Documentation files only; 30-second limit per inspection. | PLANS.md is in English, contains one authoritative tracker, accurately attributes evidence, preserves the operating app, and links to real repository paths. Diff review must also include newly created/untracked files, which ordinary git diff omits. |
 
-The current task reuses V1–V8 and performs only D1. Stop verification after this finite set is satisfied; no watch sessions, repeated full suites, additional frameworks, or coverage targets are required. No Rust tier is applicable because this solution contains no Rust code. Actual capture and player-specific behavior are separate human recommendations, not permanently pending automated gates.
+The original documentation task reused V1–V8 and performed only D1; the subsequent branding/language update uses RV1–RV3 above, while reusing unaffected native DSP and model-inference evidence. Stop verification after this finite set is satisfied; no watch sessions, repeated full suites, additional frameworks, or coverage targets are required. No Rust tier is applicable because this solution contains no Rust code. Actual capture and player-specific behavior are separate human recommendations, not permanently pending automated gates.
 
 Do not use computer-use features for verification: no AI-driven screen observation, interactive clicking, typing, or navigation in a browser or native app, including CUA. Existing finite scripted browser/UI tests may run through their test runner. Use terminal commands, APIs, logs, and deterministic tests. Do not start real system audio capture during automated checks; only an explicit user Start action initiates it.
 
@@ -134,3 +159,11 @@ These are optional user operation recommendations, outside the required tracker.
 3. Stop translation, then quit the app when convenient. Expected: subtitle processing stops, no additional transcript is automatically saved, and owned services exit. Permission prompts, if encountered, are handled through macOS settings rather than worked around.
 
 Executor handoff: after implementation and required automated checks are complete, include a short “Recommended operation checks (after completion)” list with concrete actions and expected results. Label it as agent-unperformed recommendations. Never ask the user to test during production or make a response a prerequisite for coding completion. Report genuinely blocked automated checks honestly; do not use these recommendations to conceal incomplete work. If no meaningful operation check applies to a later documentation-only change, say so briefly. Set Current to Complete and Next to None only when the requested work and its required acceptance evidence are complete.
+
+## Retina Template Correction — 2026-10-16
+
+The user supplied evidence that the 2x menu template was clipped. Inspecting the installed AppKit context confirmed that setting a 36-pixel bitmap to 18 points already creates a 2x context transform; the generator incorrectly applied an additional explicit 2x scale. Remove only the redundant scaling. Keep the original app artwork, UI, and inference behavior unchanged.
+
+Acceptance is bounded to the affected asset pipeline: regenerate the PNG assets (60 seconds); run `xcrun swift -module-cache-path .scratch/icon-module-cache scripts/check-menu-icons.swift` (30 seconds), requiring 18/36 pixel rasters with equal 18-point size, transparent outer margins, and mean alpha difference below 0.07 after reducing the 2x silhouette; package the correction (120 seconds) and compare archived image bytes (30 seconds). Each check has at most three executions. The first icon-check execution found test-script compilation errors and counts toward that budget; repair these before the next run. No application UI, capture, GPU, or full test suite needs to run for a template-only change. Preserve running apps; a separate corrected package may be produced for safe replacement after quit. Update this tracker and the repository notes with exact results.
+
+Retina correction results: generation succeeded; mask verification passed on execution 2 after fixing test compilation. The 1x/2x bounds are [1,1,15,15] and [3,3,32,31] and the reduced-mask mean alpha difference is 0.0057. The separate `release/retina-fix/kotonoha-darwin-arm64/kotonoha.app` package passed on execution 1; archive bytes match both corrected PNG assets and its executable is arm64. Native rendering and model mechanics are unchanged. The running build was preserved. Recommended operation check (not performed by the agent): quit the previous app and open this separate correction build; the entire leaf should appear in the menu bar.

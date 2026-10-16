@@ -1,5 +1,5 @@
 const { contextBridge, ipcRenderer } = require('electron');
-contextBridge.exposeInMainWorld('kotoba', {
+contextBridge.exposeInMainWorld('kotonoha', {
   snapshot: () => ipcRenderer.invoke('app:snapshot'),
   status: () => ipcRenderer.invoke('app:status'),
   settings: (value) => ipcRenderer.invoke('app:settings', value),

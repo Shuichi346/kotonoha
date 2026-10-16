@@ -216,3 +216,32 @@ async def test_periodic_commit_does_not_finish_stop_before_final_commit():
     await asyncio.wait_for(session.receive(socket), 1)
     assert session.queue.get_nowait()[0] == "Tail"
     assert session._commits_seen == 2
+
+
+def test_interface_language_localizes_readiness_and_websocket_errors(monkeypatch):
+    monkeypatch.setattr("backend.app.translation_ready", lambda: False)
+    manager = SessionManager(FakeRuntime(), FakeTranslator())
+    with TestClient(create_app("secret", manager)) as client:
+        english = client.get(
+            "/api/status",
+            headers={"Authorization": "Bearer secret", "Accept-Language": "en-US,en;q=0.9"},
+        )
+        japanese = client.get("/api/status", headers={"Authorization": "Bearer secret"})
+        assert "translation model is missing" in english.json()["translation"]["detail"]
+        assert "翻訳モデルがありません" in japanese.json()["translation"]["detail"]
+        with client.websocket_connect("/api/live?token=secret") as socket:
+            socket.send_json({"type": "start", "source": "zz", "ui_language": "en"})
+            assert socket.receive_json()["message"] == "This language is not supported."
+            socket.send_json({"type": "ui_language", "ui_language": "ja"})
+            socket.send_json({"type": "invalid"})
+            assert socket.receive_json()["message"] == "対応していない操作です。"
+
+
+def test_locale_events_never_translate_transcript_or_subtitle_content():
+    from backend.messages import header_language, localize_event
+
+    assert header_language("en;q=0,ja;q=1") == "ja"
+    assert header_language("en-US,ja;q=0.5") == "en"
+    for kind in ["subtitle", "partial"]:
+        event = {"type": kind, "text": "翻訳済みの字幕", "source": "Original words"}
+        assert localize_event(event, "en") == event
