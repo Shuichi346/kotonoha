@@ -31,6 +31,8 @@ MESSAGES = {
         "Send a JSON object.",
     "対応していない言語です。":
         "This language is not supported.",
+    "確定要求の間隔は5、10、15、20、30秒から選択してください。":
+        "Choose a commit request interval of 5, 10, 15, 20, or 30 seconds.",
     "対応していない操作です。":
         "This operation is not supported.",
     "翻訳の遅延を抑えるため、古い未処理の発話をスキップしました。":
@@ -55,6 +57,8 @@ MESSAGES = {
         "Audio capture has not been built. Run npm run build:native.",
     "発話が長すぎます。短い区切りの音声で再開してください。":
         "The utterance is too long. Resume with shorter speech segments.",
+    "翻訳結果が長すぎます。短い区切りの音声で再開してください。":
+        "The translation is too long. Resume with shorter speech segments.",
 }
 # fmt: on
 

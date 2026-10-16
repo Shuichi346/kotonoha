@@ -14,13 +14,29 @@ from backend.runtime import CapturePermissionError, receive_event
 Send = Callable[[dict], Awaitable[None]]
 
 
+def validate_commit_interval(value: object) -> int:
+    """Accept only the supported whole-second session settings."""
+    if type(value) is not int or value not in {5, 10, 15, 20, 30}:
+        raise ValueError("確定要求の間隔は5、10、15、20、30秒から選択してください。")
+    return value
+
+
 class LiveSession:
-    def __init__(self, runtime, translator, send: Send, source: str, target: str):
+    def __init__(
+        self,
+        runtime,
+        translator,
+        send: Send,
+        source: str,
+        target: str,
+        commit_interval_seconds: int = 15,
+    ):
         self.runtime = runtime
         self.translator = translator
         self.send = send
         self.source = source
         self.target = target
+        self.commit_interval_seconds = validate_commit_interval(commit_interval_seconds)
         self.stopping = asyncio.Event()
         self.queue = asyncio.Queue(maxsize=3)
         self.task = None
@@ -136,7 +152,7 @@ class LiveSession:
             await socket.send(pcm)
             uncommitted += len(pcm)
             # Bound continuous-speech context and NeMo's per-buffer upload limit.
-            if uncommitted >= 15 * 32000:
+            if uncommitted >= self.commit_interval_seconds * 32000:
                 self._commits_sent += 1
                 await socket.send(json.dumps({"type": "input_audio_buffer.commit"}))
                 uncommitted = 0

@@ -23,9 +23,15 @@ export function Controls({ live }: { live: Live }) {
   return <main className="controller">
     <header className="titlebar"><span className="wordmark">kotonoha</span><span className="titlebar-caption">{text.tagline}</span></header>
     <div className="control-body">
-      <label className="interface-language">{text.interfaceLanguage}<select aria-label={text.interfaceLanguage} value={uiLanguage(settings.uiLanguage)} onChange={(event) => save({ ...settings, uiLanguage: uiLanguage(event.target.value) })}><option value="ja">日本語</option><option value="en">English</option></select></label>
-      <div className="tabs" aria-label={text.view}><button className={tab === 'live' ? 'selected' : ''} onClick={() => setTab('live')}>{text.live}</button><button className={tab === 'history' ? 'selected' : ''} onClick={() => setTab('history')}>{text.history}<span>{history.length || ''}</span></button></div>
-      {tab === 'live' ? <>
+      <nav className="tabs" aria-label={text.view}><button aria-pressed={tab === 'live'} className={tab === 'live' ? 'selected' : ''} onClick={() => setTab('live')}>{text.live}</button><button aria-pressed={tab === 'history'} className={tab === 'history' ? 'selected' : ''} onClick={() => setTab('history')}>{text.history}<span>{history.length || ''}</span></button><button aria-pressed={tab === 'settings'} className={tab === 'settings' ? 'selected' : ''} onClick={() => setTab('settings')}>{text.settings}</button></nav>
+      {tab === 'settings' ? <section className="app-settings" aria-label={text.settings}>
+        <h1>{text.settings}</h1>
+        <p className="intro">{text.settingsIntro}</p>
+        <label className="interface-language">{text.interfaceLanguage}<select aria-label={text.interfaceLanguage} value={uiLanguage(settings.uiLanguage)} onChange={(event) => save({ ...settings, uiLanguage: uiLanguage(event.target.value) })}><option value="ja">日本語</option><option value="en">English</option></select></label>
+        <label className="interval-setting">{text.commitInterval}<select aria-label={text.commitInterval} aria-describedby="commit-interval-hint" disabled={active} value={settings.commitIntervalSeconds} onChange={(event) => save({ ...settings, commitIntervalSeconds: Number(event.target.value) })}>{[5, 10, 15, 20, 30].map((value) => <option key={value} value={value}>{value}{text.seconds}</option>)}</select></label>
+        <p className="settings-hint" id="commit-interval-hint">{text.commitIntervalHint}</p>
+        {active ? <p className="settings-hint">{text.commitIntervalActive}</p> : null}
+      </section> : tab === 'live' ? <>
         <h1>{text.headline}</h1>
         <p className="intro">{text.intro}</p>
         <div className="audio-source"><Wave/><div><strong>{text.systemAudio}</strong><span>{text.audioApps}</span></div><span className={`audio-dot ${state === 'listening' ? 'listening' : ''}`}/></div>
@@ -46,7 +52,7 @@ export function Controls({ live }: { live: Live }) {
           </div></details>
           <button className="secondary full" onClick={() => { void window.kotonoha?.hideController(); }}><Icon name="external"/>{text.subtitlesOnly}<span className="shortcut">{text.returnShortcut}</span></button>
         </section>
-        <section className="models"><div className="section-heading"><h2>{text.models}</h2><button aria-label={text.checkReadiness} title={text.checkReadiness} disabled={checking || live.requestingPermission} onClick={() => { void check(); }}><Icon name="refresh"/></button></div><div className="model-list"><ModelRow text={text} title="Nemotron 3.5" status={readiness?.asr}/><ModelRow text={text} title="TranslateGemma 4B" status={readiness?.translation}/></div>
+        <section className="models"><div className="section-heading"><h2>{text.models}</h2><button aria-label={text.checkReadiness} title={text.checkReadiness} disabled={checking || live.requestingPermission} onClick={() => { void check(); }}><Icon name="refresh"/></button></div><div className="model-list"><ModelRow text={text} title="Nemotron 3.5" status={readiness?.asr}/><ModelRow text={text} title="Hy-MT2 1.8B" status={readiness?.translation}/></div>
           {readiness ? <details className="diagnostics"><summary>{text.readinessDetails}</summary><ul>{[[text.capture, readiness.capture], [text.transcription, readiness.asr], [text.translation, readiness.translation]].map(([name, item]) => <li key={name as string}><strong>{name as string}</strong><p>{(item as ModelStatus).permission === 'required' ? text.permissionRequired : (item as ModelStatus).detail}</p></li>)}</ul></details> : null}
         </section>
         {latest ? <section className="last-caption"><span>{text.latestCaption}</span><p>{latest.text}</p></section> : null}

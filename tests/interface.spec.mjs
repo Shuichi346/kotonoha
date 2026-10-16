@@ -115,8 +115,12 @@ test('interface language defaults to Japanese and switches independently from su
   await bridge(page);
   await page.goto('/');
   await expect(page.locator('.wordmark')).toHaveText('kotonoha');
+  await expect(page.getByLabel('Language', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: '設定', exact: true }).click();
   await expect(page.getByLabel('Language', { exact: true })).toHaveValue('ja');
   await page.getByLabel('Language', { exact: true }).selectOption('en');
+  await expect(page.getByRole('button', { name: 'Settings', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Live translation', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Start translation', exact: true })).toBeVisible();
   await expect(page.getByLabel('Audio language', { exact: true })).toHaveValue('en');
   await expect(page.getByLabel('Subtitle language', { exact: true })).toHaveValue('ja');
@@ -124,7 +128,9 @@ test('interface language defaults to Japanese and switches independently from su
   await expect(page).toHaveTitle('kotonoha — Live subtitle translation');
   await page.getByRole('button', { name: 'History', exact: true }).click();
   await expect(page.getByText('History for this session')).toBeVisible();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByLabel('Language', { exact: true }).selectOption('ja');
+  await page.getByRole('button', { name: '履歴', exact: true }).click();
   await expect(page.getByText('この起動中の履歴', { exact: true })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
 });
@@ -143,6 +149,49 @@ test('subtitle toolbar follows interface language while retaining subtitle conte
   await expect(page.locator('.overlay-controls button').first().locator('circle')).toHaveCount(0);
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
 });
+
+for (const viewport of [{ width: 480, height: 640 }, { width: 420, height: 500 }]) {
+  test(`settings tab saves interval and keeps natural-boundary guidance at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('console', (message) => { if (['error', 'warning'].includes(message.type())) errors.push(message.text()); });
+    await page.setViewportSize(viewport);
+    await bridge(page);
+    await page.goto('/');
+    await expect(page).toHaveURL('http://127.0.0.1:5173/');
+    await expect(page).toHaveTitle('kotonoha — ライブ字幕翻訳');
+    await expect(page.getByRole('main')).toBeVisible();
+    await expect(page.getByLabel('Language', { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: '設定', exact: true }).click();
+    const interval = page.getByLabel('確定要求の間隔', { exact: true });
+    await expect(interval).toHaveValue('15');
+    await expect(interval.locator('option')).toHaveText(['5秒', '10秒', '15秒', '20秒', '30秒']);
+    await expect(page.getByText(/自然な区切りはそのまま/)).toBeVisible();
+    await interval.selectOption('10');
+    await page.screenshot({ path: `/private/tmp/kotonoha-settings-ja-${viewport.width}.png`, animations: 'disabled' });
+    await page.getByLabel('Language', { exact: true }).selectOption('en');
+    await expect(page.getByLabel('Finalization request interval', { exact: true })).toHaveValue('10');
+    await expect(page).toHaveTitle('kotonoha — Live subtitle translation');
+    await expect(page.locator('vite-error-overlay')).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: `/private/tmp/kotonoha-settings-${viewport.width}.png`, animations: 'disabled' });
+    await page.getByRole('button', { name: 'Live translation', exact: true }).click();
+    await expect(page.getByLabel('Audio language', { exact: true })).toHaveValue('en');
+    await expect(page.getByLabel('Subtitle language', { exact: true })).toHaveValue('ja');
+    await page.getByRole('button', { name: 'Start translation', exact: true }).click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(page.getByLabel('Finalization request interval', { exact: true })).toBeDisabled();
+    await expect(page.getByText('Stop translation on the Live translation tab to change the interval.', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Language', { exact: true })).toBeEnabled();
+    await page.getByRole('button', { name: 'Live translation', exact: true }).click();
+    await page.getByRole('button', { name: 'Stop translation', exact: true }).click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(page.getByLabel('Finalization request interval', { exact: true })).toBeEnabled();
+    await expect(page.getByLabel('Finalization request interval', { exact: true })).toHaveValue('10');
+    expect((await page.evaluate(() => window.kotonoha.snapshot())).settings.commitIntervalSeconds).toBe(10);
+    expect(errors).toEqual([]);
+  });
+}
 
 
 test('first permission guide separates explanation, OS approval, verification, and explicit start', async ({ page }) => {
@@ -205,6 +254,7 @@ test('deferred or declined permission cannot trigger startup or duplicate prompt
   await expect(guide).toBeVisible();
   expect(await page.evaluate(() => window.testCalls)).toEqual(['permission']);
   await guide.getByRole('button', { name: 'あとで設定する', exact: true }).click();
+  await page.getByRole('button', { name: '設定', exact: true }).click();
   await page.getByLabel('Language', { exact: true }).selectOption('en');
   await expect(guide).toHaveAccessibleName('Before you start translating');
   await expect(guide).toContainText('Choose “Allow” in macOS');
@@ -275,12 +325,14 @@ test('compact controller keeps primary controls usable and lower settings reacha
   await bridge(page);
   await page.goto('/');
   await expect(page.getByRole('button', { name: '翻訳を開始', exact: true })).toBeVisible();
-  await expect(page.getByLabel('Language', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Language', { exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole('switch', { name: '原文も表示', exact: true }).check();
   await expect(page.getByRole('switch', { name: '原文も表示', exact: true })).toBeChecked();
   await page.getByText('ローカルモデル', { exact: true }).scrollIntoViewIfNeeded();
-  await expect(page.getByText('TranslateGemma 4B', { exact: true })).toBeVisible();
+  await expect(page.getByText('Hy-MT2 1.8B', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '設定', exact: true }).click();
   await page.getByLabel('Language', { exact: true }).selectOption('en');
+  await page.getByRole('button', { name: 'Live translation', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Start translation', exact: true })).toBeVisible();
 });

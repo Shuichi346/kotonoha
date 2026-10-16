@@ -2,15 +2,15 @@
 
 Watch a video in your usual player and keep translated captions in a separate, transparent window. Captions stay above other applications, can be dragged or resized, and can pass clicks through to the video. The control window can be hidden while captions remain visible.
 
-The app captures **Mac system output**, including YouTube in a browser. It uses the requested Nemotron 3.5 model through NeMo-Speech.cpp for streaming transcription, then TranslateGemma 4B through MLX for translation. Inference runs locally after model download. No microphone or virtual audio driver is required.
+The app captures **Mac system output**, including YouTube in a browser. It uses Nemotron 3.5 through NeMo-Speech.cpp for streaming transcription, then **Hy-MT2-1.8B-4bit** through MLX for translation. Inference runs locally after model download. No microphone or virtual audio driver is required.
 
 ## Open the app on this Mac
 
-The current startup and overlay correction build is `release/startup-fix/kotonoha-darwin-arm64/kotonoha.app`. Ordinary `npm run package` produces `release/kotonoha-darwin-arm64/kotonoha.app`. Open it in Finder, choose the audio and subtitle languages, and click **翻訳を開始**. On first use, macOS may request Screen & System Audio Recording permission for **LiveCaption Audio** or the parent app. Allow the request in System Settings → Privacy & Security → Screen & System Audio Recording, then restart translation if required. Models load before audio capture starts. The packaged Python/model runtime is staged outside Documents so it does not require access to the source checkout at launch.
+The current Hy-MT2 build is `release/hy-mt2/kotonoha-darwin-arm64/kotonoha.app`. Ordinary `npm run package` produces `release/kotonoha-darwin-arm64/kotonoha.app`. Quit the previous app, open this build in Finder, confirm **Hy-MT2 1.8B** in Models, choose the audio and subtitle languages, and click **翻訳を開始**. On first use, use the separate audio permission guide to allow Screen & System Audio Recording, confirm access, then start translation explicitly. Models load before audio capture starts. The packaged Python/model runtime is staged outside Documents so it does not require access to the source checkout at launch.
 
-The interface defaults to Japanese. Choose **表示言語 → English** to switch the controls, menus, subtitle toolbar, and service messages to English. This preference is saved independently of the audio/subtitle language pair. Legacy settings are read from the former kotoba profile without modifying it; new settings are saved in the kotonoha profile. Quit the old app before opening the new one because production audio services use the same loopback port.
+The interface defaults to Japanese. Choose **設定 → Language → English** to switch the controls, menus, subtitle toolbar, and service messages to English. This preference is saved independently of the audio/subtitle language pair. Legacy settings are read from the former kotoba profile without modifying it; new settings are saved in the kotonoha profile. Quit the old app before opening the new one because production audio services use the same loopback port.
 
-Start playing the video. Captions appear in the independent subtitle window after speech is recognized and translated. It starts hidden with clicks passing through to the app below. Use **字幕だけにする** to hide the controls. The video continues in its own application. When the visible subtitle window is empty, a light-gray guide shows its entire area without hovering. Unlocking also shows its interactive bounds; locking restores transparent caption playback.
+Start playing the video. Captions appear in the independent subtitle window after speech is recognized and translated. The subtitle window starts visible and locked, with clicks passing through to the app below. Starting translation hides/resets it until the first translated caption. Use **字幕だけにする** to hide the controls. The video continues in its own application. When the visible subtitle window is empty, a light-gray guide shows its entire area without hovering. Unlocking also shows its interactive bounds; locking restores transparent caption playback.
 
 | Action | Operation |
 |---|---|
@@ -39,7 +39,9 @@ npm run prepare:models
 npm start
 ```
 
-The models occupy about 2.8 GiB in ignored `models/`; they are already downloaded on this Mac. Model preparation contacts Hugging Face and NVIDIA's configured model source. Once prepared, application inference uses local files. The translation model's own [Gemma terms](https://huggingface.co/mlx-community/translategemma-4b-it-4bit) and the ASR model's [terms](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b) apply.
+The active models occupy about 1.7 GiB in ignored `models/hy-mt2-1.8b-4bit` and `models/asr`; they are already downloaded on this Mac. Model preparation contacts Hugging Face and NVIDIA's configured model source. The Hy-MT2 revision is pinned in `backend/config.py`. Once prepared, application inference uses local files. The [MLX translation model's license](https://huggingface.co/mlx-community/Hy-MT2-1.8B-4bit) and the ASR model's [terms](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b) apply. Earlier TranslateGemma files and app builds are retained, but new runtime snapshots copy only the active models.
+
+Hy-MT2 uses temperature 0.7, top-p 0.6, top-k 20, and repetition penalty 1.05. Subtitle output is capped at 512 tokens; reaching the cap reports a localized error instead of showing an incomplete translation. This is intended for entertainment-video captions. The text-only comparison found useful multilingual results alongside errors in currencies, discounts, and scheduling; no general accuracy or audio-latency guarantee is made.
 
 The app icon uses the supplied emblem, cropped from its outer background with a transparent macOS icon margin. The menu bar uses a monochrome leaf template with a Retina representation; the subtitle toolbar uses a sliders symbol. `node scripts/build-icons.mjs` regenerates PNG/ICNS assets from `assets/icon-source.png` using the installed macOS tools.
 

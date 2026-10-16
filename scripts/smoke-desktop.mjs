@@ -11,7 +11,13 @@ try {
   desktop = await electron.launch({ executablePath: path.resolve(process.env.KOTONOHA_SMOKE_APP || 'release/kotonoha-darwin-arm64/kotonoha.app/Contents/MacOS/kotonoha'), env, timeout: 15000 });
   const errors = [];
   desktop.on('window', (page) => page.on('pageerror', (error) => errors.push(error.message)));
-  const controller = await desktop.firstWindow();
+  await desktop.firstWindow();
+  let controller;
+  for (const page of desktop.windows()) {
+    const window = await desktop.browserWindow(page);
+    if (!await window.evaluate((value) => value.isAlwaysOnTop())) { controller = page; break; }
+  }
+  assert(controller, 'Controller renderer must be available');
   await controller.waitForFunction(() => !!window.kotonoha);
   const presentation = await desktop.evaluate(({ BrowserWindow, app, screen }) => {
     const windows = BrowserWindow.getAllWindows();
@@ -37,7 +43,7 @@ try {
     const before = await window.kotonoha.snapshot();
     const status = await window.kotonoha.status();
     const permissionBridge = [typeof window.kotonoha.requestCapturePermission, typeof window.kotonoha.openCaptureSettings];
-    await window.kotonoha.settings({ ...before.settings, uiLanguage: 'en' });
+    await window.kotonoha.settings({ ...before.settings, uiLanguage: 'en', commitIntervalSeconds: 10 });
     await window.kotonoha.lock(false);
     await window.kotonoha.lock(true);
     await window.kotonoha.overlay(false);
@@ -50,11 +56,14 @@ try {
   assert.equal(result.before.settings.uiLanguage, 'ja');
   assert.equal(result.before.settings.fontSize, 30);
   assert.equal(result.before.settings.showOriginal, false);
+  assert.equal(result.before.settings.commitIntervalSeconds, 15);
   assert.equal(result.before.visible, false);
   assert.equal(result.before.locked, true);
   assert.equal(result.after.settings.uiLanguage, 'en');
+  assert.equal(result.after.settings.commitIntervalSeconds, 10);
   assert.equal(result.after.settings.target, result.before.settings.target);
   assert.equal(JSON.parse(readFileSync(path.join(profile, 'settings.json'), 'utf8')).uiLanguage, 'en');
+  assert.equal(JSON.parse(readFileSync(path.join(profile, 'settings.json'), 'utf8')).commitIntervalSeconds, 10);
   await controller.waitForFunction(() => document.documentElement.lang === 'en');
   const menus = await desktop.evaluate(({ Menu }) => Menu.getApplicationMenu().items.map((item) => ({ label: item.label, children: item.submenu?.items.map((child) => child.label) })));
   assert.equal(menus[0].label, 'kotonoha');
@@ -63,6 +72,9 @@ try {
   assert.equal(menus[1].label, 'Edit');
   assert.equal(result.status.asr.ready, true);
   assert.equal(result.status.translation.ready, true);
+  assert.equal(result.status.translation.detail, 'Hy-MT2 1.8B · MLX 4-bit');
+  // Hidden smoke windows need a rendered model label, not on-screen visibility.
+  await controller.getByText('Hy-MT2 1.8B', { exact: true }).waitFor({ state: 'attached', timeout: 5000 });
   assert.equal(result.after.visible, false);
   assert.equal(result.after.locked, true);
   assert.deepEqual(await desktop.evaluate(({ BrowserWindow }) => ({
@@ -77,6 +89,20 @@ try {
   assert(captions);
   assert.equal(await captions.evaluate(() => getComputedStyle(document.documentElement).backgroundColor), 'rgba(0, 0, 0, 0)');
   assert.deepEqual(errors, []);
+  // Block Start at the transport boundary: verify its real IPC payload without capture.
+  await desktop.evaluate(() => {
+    const original = WebSocket.prototype.send;
+    WebSocket.prototype.send = function (data) {
+      const message = JSON.parse(data);
+      if (message.type === 'start') { globalThis.smokeStartPayload = message; return; }
+      return original.call(this, data);
+    };
+  });
+  await controller.evaluate(() => window.kotonoha.start());
+  assert.deepEqual(await desktop.evaluate(() => globalThis.smokeStartPayload), {
+    type: 'start', source: result.after.settings.source, target: result.after.settings.target,
+    ui_language: 'en', commit_interval_seconds: 10,
+  });
   const safety = await desktop.evaluate(({ BrowserWindow, app }) => {
     const windows = BrowserWindow.getAllWindows();
     const controls = windows.find((win) => !win.isAlwaysOnTop());

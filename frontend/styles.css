@@ -87,8 +87,9 @@ footer { display: flex; justify-content: center; align-items: center; gap: 8px; 
 @media (prefers-reduced-motion: reduce) { *, *:before, *:after { transition: none !important; } }
 @media (max-width: 460px) { .control-body { padding-left: 20px; padding-right: 20px; } h1 { font-size: 22px; }.titlebar-caption { display: none; } }
 
-.interface-language { display: flex; align-items: center; justify-content: flex-end; gap: 10px; color: var(--muted); font-size: 11px; margin: 0 0 19px; }
-.interface-language select { width: 112px; padding: 7px 9px; font-size: 11px; }
+.interface-language, .interval-setting { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 12px; margin: 0; padding: 18px 0; border-bottom: 1px solid var(--line); }
+.app-settings select { width: 126px; flex-shrink: 0; padding: 9px 10px; font-size: 12px; }
+.settings-hint { color: var(--muted); font-size: 11px; line-height: 1.8; margin: 12px 0 0; }
 .permission-notice { background: #f0f4ff; border: 1px solid #dce4ff; border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; font-size: 12px; line-height: 1.7; }
 .permission-notice strong { display: block; font-weight: 550; }
 .permission-notice button { padding: 5px 0 0; color: var(--blue); font-size: 11px; }

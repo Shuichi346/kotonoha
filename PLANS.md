@@ -57,10 +57,54 @@ This is the single authoritative implementation and acceptance checklist. The or
 - [x] WV1 — Verify display geometry, user-only app activation, compact controls, and packaged integration.
 - [x] WD1 — Package separately and record final evidence.
 
-Current: Complete — Compact startup placement and regular Dock/menu behavior are packaged and verified within the stated OS-appearance limits.
+- [x] T1 — Add a Settings tab, move interface Language into it, and persist a selectable periodic commit interval.
+- [x] T2 — Pass the selected interval into each backend session without changing natural endpointing, translation segmentation, captions, or queue policy.
+- [x] TV1 — Verify preference migration/validation, localized tab interactions, interval boundaries, start payload, and final stop drain; pass frontend/backend checks.
+- [x] TP1 — Package a separate arm64 settings build and verify its archive, runtime architecture, and hidden startup without capture.
+- [x] TD1 — Record the final behavior and verification evidence.
+
+- [x] H1 — Download the requested Hy-MT2 MLX 4bit checkpoint separately and verify local loading.
+- [x] HV1 — Translate five synthetic English and five Japanese examples; compare the same inputs with existing TranslateGemma without capture.
+- [x] HD1 — Record verbatim outputs, settings, timing, and qualitative migration limits without changing application inference.
+
+- [x] HM1 — Evaluate five aligned examples in all twelve directions among English, Chinese, Korean, and Japanese on both local models.
+- [x] HMV1 — Review meaning, numbers, negation, idioms, register, and output termination; record a Japanese migration recommendation.
+
+- [x] HY1 — Switch model preparation, the persistent translator, and model labels to the evaluated Hy-MT2 1.8B 4bit checkpoint.
+- [x] HYV1 — Verify prompts, checkpoint EOS, subtitle generation limits, final-drain regressions, UI labels, and selective runtime staging.
+- [x] HYP1 — Create a separate arm64 app/runtime and verify its actual translator, archived model selection, architecture, and hidden startup.
+- [x] HYD1 — Update current operating documentation and durable model contracts with final evidence.
+
+Current: Complete — Hy-MT2 is active in the source and separately packaged app; required checks passed without capture.
 Next: None.
 
+## Hy-MT2 Application Migration — 2026-10-16
+
+The user approved Hy-MT2 for entertainment-video subtitles and delegated the output-token limit. Use the evaluated `mlx-community/Hy-MT2-1.8B-4bit` revision `e5c6fe56c7b3bc77fae5ae92db31f2178f1e6912` in its own model directory. Use the official English translation instruction with full target-language names, no system prompt, the checkpoint chat template/EOS, temperature 0.7/top-p 0.6/top-k 20/repetition penalty 1.05, and 512 output tokens for bounded subtitle work. Retain the existing 1700-token input-work bound; this is a latency policy, not Hy-MT2's architectural context limit. Report output-cap exhaustion as a localized error instead of emitting an incomplete caption. Preserve capture permissions, NeMo endpointing, periodic commits, UI preferences, and final translation drain.
+
+Stage only ASR and the selected Hy-MT2 model into a new Application Support runtime; keep old models and artifacts. Package separately to `release/hy-mt2`. Finite acceptance: backend pytest (60 seconds), Ruff lint/format (30 seconds each), desktop Node tests (30 seconds), frontend build (existing 30-second stages), existing scripted UI suite (90 seconds), actual Translator text-only smoke (60 seconds), packaging (180 seconds), archived runtime/arm64 inspection (30 seconds), hidden temporary-profile desktop smoke (60 seconds), and actual staged Translator text inference (60 seconds). Each verification unit permits initial execution plus two focused repairs. Reuse unchanged native DSP, capture-helper, icon, and ASR-inference evidence; do not start capture or request OS permissions. No dependency changes are required. Show concise progress in conversation and preserve the historical checklist/evidence above rather than replaying it.
+
+Resume evidence: source implementation is present. Backend pytest (78 tests), Ruff lint/format, twelve Node desktop tests including selected-model staging, and frontend type/build checks passed on execution 1 before interruption. No source changes invalidated those results. The UI suite, actual Translator smoke, and migration package had not run; `release/hy-mt2` does not exist. The independent packaging audit confirmed the model allowlist and separate output requirements. The optional independent adapter review did not complete because that agent hit an account usage limit; the parent performs the adapter review and required verification.
+
+HYV1 completion: fourteen scripted UI tests passed on execution 1, including the Hy-MT2 model label. The actual persistent Translator passed execution 1 with English→Japanese, Japanese→English, Chinese→Korean, and Korean→Chinese text, checkpoint EOS 120020, the 512-token cap, nonempty target-script output, and no leaked control tokens. No capture or ASR process was started. The known Transformers dynamic-RoPE extra-key warning remains nonfatal for these short inputs. Current docs now describe the new adapter; runtime code is unchanged from the passing source checks.
+
+HYP1 progress: packaging execution 1 created `release/hy-mt2/kotonoha-darwin-arm64/kotonoha.app` with runtime `f93a703fa8a613ec`. Archive/model inspection execution 1 compared 22 desktop/frontend/backend files, full translator-weight hashes, the configured revision, selected model folders, and the tracked icon. Architecture execution 1 confirmed 33 components plus Python/NeMo. The staged real-Translator check passed execution 1 in all four language directions without capture. Hidden desktop smoke execution 1 timed out at the new model-label visibility assertion after status/model identity checks passed. The test now selects the controller by BrowserWindow identity and checks DOM attachment in its intentionally hidden window; no application/runtime code changed. Hidden smoke execution 2 is next.
+
+Final HYP1/HYD1 evidence: hidden smoke execution 2 passed with Hy-MT2 status and renderer label, two windows, controller at 480×640, preserved caption separation, Dock visibility, localized menus, persisted 10-second commits, correct intercepted Start payload, stopped capture, and zero renderer errors. The test-only repair does not require repackaging because scripts are excluded from the app archive. Source/current documentation and durable instructions now identify Hy-MT2 and the selected-model staging contract; historical TranslateGemma evidence remains identified as historical. Documentation whitespace review passed. All required units are complete; no real audio recording or OS permission prompt occurred. The packaged artifact and previous builds remain available. Recommended user operation after completion is documented in NOTES.md and is not an agent-run acceptance gate.
+
 Save this tracker after each implementation step or independent verification unit. Show the full checklist at execution start, phase boundaries, and completion; use changed lines with Current/Next for ordinary updates, unless the user requests shorter reporting. Do not create a second checklist in another file. Narrative rationale belongs in NOTES.md and component documentation.
+
+## Settings Tab and Periodic Commit Interval — 2026-10-16
+
+The user requested a Settings tab containing the existing interface `Language` selector and a configurable periodic ASR commit interval. Keep audio/source and subtitle/target language selection on Live translation. Offer 5, 10, 15, 20, and 30 seconds, preserve 15 seconds for new/migrated preferences, persist the selection, and apply it on the next explicit translation start. Disable interval editing during a session; interface language still changes immediately. Old profiles without the field retain all existing values and the previous 15-second behavior.
+
+Keep NeMo's 600 ms natural endpointing and periodic PCM-based timing unchanged except for the interval value. Explicitly exclude punctuation/length segmentation, subtitle pagination, and age-based queue limits. Preserve final commit/translation drain, authenticated loopback transport, capture permission separation, and existing subtitle behavior.
+
+Finite checks for this source: frontend build (30 seconds per stage), desktop tests (30 seconds), existing Playwright suite (90 seconds), backend pytest (60 seconds), Ruff lint/format (30 seconds each), separate `release/settings-tab` package (180 seconds), archive/arm64 inspection (30 seconds), and hidden packaged smoke (60 seconds). Each unit permits initial execution plus two focused repairs. Browser plugin is not available; use the repository's finite scripted Playwright workflow, including desktop 480×640 and compact 420×500 settings checks, console assertions, and a screenshot outside the repo. No real audio capture or OS permission prompts. Reuse unchanged native DSP and model-inference evidence; runtime backend changes require a new independent Application Support snapshot. Preserve existing artifacts and running apps.
+
+TV1 evidence: frontend build and twelve desktop tests passed on execution 1. Sixty-five backend tests and Ruff lint/format passed on execution 1, including selected PCM thresholds, unchanged 600 ms endpointing, final stop drain, and strict localized WebSocket validation. Fourteen UI tests passed on execution 2 after execution 1 could not launch Chromium under the sandbox (MachPortRendezvous bootstrap permission denial); no source repair was needed. Settings interactions at 480×640 and 420×500 confirm saved 10-second selection, immediate Japanese/English switching, disabled interval editing during translation, unchanged language pair, no horizontal overflow, and no app console/page errors. Existing Starlette/httpx and terminal color-environment warnings are unrelated. The main-process start mapping is reviewed; final archive inspection will verify it ships with the tested backend field contract.
+
+Final TP1/TD1 evidence: fourteen UI tests passed again on execution 3 after screenshot capture was changed to finish CSS transitions, producing stable Japanese and English screenshots outside the repository. The source/UI build is unchanged. Package execution 1 produced `release/settings-tab/kotonoha-darwin-arm64/kotonoha.app` and staged runtime `bb2f22db2f44c6ff`. Architecture inspection execution 1 verified 33 bundled components plus Python/NeMo. Archive inspection execution 2 confirmed eight desktop/frontend files, the staged backend, start-field mapping, and the tracked ICNS; execution 1 had assumed the resource icon filename instead of reading the plist. Hidden smoke execution 1 passed with two windows, model readiness, default 15 seconds, 10 seconds persisted to disk, and zero renderer errors. The real IPC Start path carries `commit_interval_seconds:10`; a transport intercept blocked that message from reaching the backend, so no capture or model inference started. Final documentation and whitespace review passed. Existing builds/running apps were preserved. Optional user operation, not an agent-run acceptance gate: quit the old app, open this separate build, choose 10 seconds, and explicitly start translation to compare the same Japanese audio. No actual audio latency improvement is claimed.
 
 ## Branding and Interface-Language Update — 2026-10-16
 
@@ -78,20 +122,20 @@ Recommended operation checks after completion, not agent-run gates: open kotonoh
 
 The user watches a video in its existing application while kotonoha displays translated subtitles in an independent window on the same display. The subtitle surface must look like subtitles: transparent canvas, outlined white text, and controls visible only during interaction. The user can place it above the video or elsewhere on the display, keep it above other applications, resize it, and hide the separate controller.
 
-Explicit requirements are Mac system-output input, translated subtitle output, the requested TranslateGemma and Nemotron models, and a subtitle-only window that coexists with the video application. The selected implementation uses Node.js/Electron/React for the interface, Python for model orchestration and translation, NeMo-Speech.cpp for ASR, and a narrow Swift helper for system audio. Local inference, permission-aware startup, and bounded processing are implementation decisions supporting that workflow.
+Explicit requirements are Mac system-output input, translated subtitle output, Hy-MT2 and Nemotron models, and a subtitle-only window that coexists with the video application. The user approved replacing the original TranslateGemma model after the evaluations recorded above. The selected implementation uses Node.js/Electron/React for the interface, Python for model orchestration and translation, NeMo-Speech.cpp for ASR, and a narrow Swift helper for system audio. Local inference, permission-aware startup, and bounded processing are implementation decisions supporting that workflow.
 
 Target Apple silicon only: macOS 26+, arm64 execution, no Intel builds, universal app distributions, Rosetta workflows, or Intel compatibility testing. Use native arm64-compatible runtimes and helpers. A dependency requiring Intel execution is a blocker.
 
-The delivered app is a local development build linked to this checkout's Python environment and models. A portable installer, Developer ID distribution, notarization, video embedding, microphone transcription, cloud services, and automatic recording are outside this implementation. No numerical latency or translation-quality guarantee was established. The user reported on 2026-10-16 that the current app runs comfortably; preserve that working behavior while applying the requested branding and language improvements.
+The delivered app is a local development build with its Python environment and selected models staged in Application Support, independent of the Documents checkout at startup. A portable installer, Developer ID distribution, notarization, video embedding, microphone transcription, cloud services, and automatic recording are outside this implementation. No numerical audio-latency or general translation-quality guarantee was established. The user reported on 2026-10-16 that the current app runs comfortably; preserve that working behavior while applying requested changes.
 
 ## Existing System and Evidence
 
 - Repository root: `/Users/shuichi/Documents/GitHub/Real-time-translation`.
-- App artifact: `release/kotonoha-darwin-arm64/kotonoha.app`.
+- Current app artifact: `release/hy-mt2/kotonoha-darwin-arm64/kotonoha.app`; ordinary packaging defaults to `release/kotonoha-darwin-arm64/kotonoha.app`.
 - Node.js 26.10.0 and npm 12.2.0 were observed during implementation. The manifest requires Node.js >=26.5 and npm >=12.0.1, with project-local engine enforcement.
 - Python 3.13.11 is managed by uv in `.venv`; `pyproject.toml`, `.python-version`, and `uv.lock` define the Python environment.
 - The implementation uses Electron 44.7.2, React 19.3.1, Vite 8.3.4, TypeScript 7.0.2, and Playwright 1.64.1. The Python evidence records mlx-lm 0.32.1 and MLX 0.32.4. The installed arm64 NeMo CLI is 0.2.0.
-- Requested models are downloaded into ignored `models/translation` and `models/asr`, approximately 2.8 GiB combined. Dependency trees, builds, native binaries, and scratch data remain ignored.
+- Active models are in ignored `models/hy-mt2-1.8b-4bit` and `models/asr`, approximately 1.7 GiB combined. The old `models/translation` is retained but excluded from new runtime snapshots. Dependency trees, builds, native binaries, and scratch data remain ignored.
 - Existing evidence is available in this session, NOTES.md, backend/README.md, and native/README.md. Reuse valid evidence; do not rerun checks to populate this plan.
 - The user's comfort report is user-reported operational evidence. It does not specify a player, language pair, measured latency, or exhaustive interaction coverage. The agent has not captured the user's live system audio or performed an AI-operated visual inspection.
 
@@ -107,7 +151,7 @@ The live socket accepts `start` with source/target codes and `stop`. It emits st
 
 `backend/runtime.py` owns NeMo on authenticated loopback port 8766, with Metal and the requested `nemotron-3.5` model. It connects to `/v1/audio/transcriptions/realtime`, configures 16 kHz input, and sends binary PCM16. Enable token-silence endpointing with `--asr.endpointing.enable` and threshold `--asr.endpointing.stop_history_eou_ms 600`. The Boolean enable flag takes no trailing value. Periodic 15-second commits bound continuous speech; stop commits the unfinished utterance and drains pending translation before reporting stopped.
 
-`backend/translation.py` keeps the requested `mlx-community/translategemma-4b-it-4bit` model on one persistent MLX worker. Use structured content with `source_lang_code`, `target_lang_code`, and `text`, and register `<end_of_turn>` as EOS. Models stay warm between sessions. A queue holds three waiting utterances; overload drops the oldest waiting work with a status message while preserving active work and recent speech. Latency is measured from final-ASR receipt, not from video playback.
+`backend/translation.py` keeps the pinned `mlx-community/Hy-MT2-1.8B-4bit` model on one persistent MLX worker. Use its native template/EOS and the official English translation instruction with full target-language names, without a system prompt. The generation policy is specified in the migration section above. Models stay warm between sessions. A queue holds three waiting utterances; overload drops the oldest waiting work with a status message while preserving active work and recent speech. Latency is measured from final-ASR receipt, not from video playback.
 
 ### Desktop and interface
 
@@ -124,7 +168,7 @@ Start windows from `app.whenReady().then(...)`; do not block main-module evaluat
 These official references were consulted during the original implementation; this documentation update adds no version-specific dependency change:
 
 - [NeMo server and realtime protocol](https://github.com/NVIDIA/NeMo-Speech.cpp/blob/main/docs/server.md), [API](https://github.com/NVIDIA/NeMo-Speech.cpp/blob/main/docs/api.md), and [ASR configuration](https://github.com/NVIDIA/NeMo-Speech.cpp/blob/main/docs/asr/configuration.md).
-- [Requested ASR model](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b) and [requested MLX translation model](https://huggingface.co/mlx-community/translategemma-4b-it-4bit).
+- [Requested ASR model](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b) and [active MLX translation model](https://huggingface.co/mlx-community/Hy-MT2-1.8B-4bit).
 - [Apple ScreenCaptureKit](https://developer.apple.com/documentation/screencapturekit/capturing-screen-content-in-macos). Installed Xcode SDK headers supplied signatures where the web documentation required JavaScript.
 - [Electron security](https://www.electronjs.org/docs/latest/tutorial/security), [ES modules](https://www.electronjs.org/docs/latest/tutorial/esm), and [BrowserWindow API](https://www.electronjs.org/docs/latest/api/browser-window). `getBackgroundColor()` returns RGB and omits alpha; combine that contract with transparent renderer styling when testing.
 

@@ -1,7 +1,7 @@
 [project]
 name = "real-time-translation"
 version = "0.1.0"
-description = "Apple silicon system audio captions with NeMo and TranslateGemma"
+description = "Apple silicon system audio captions with NeMo and Hy-MT2"
 requires-python = ">=3.13,<3.14"
 dependencies = [
   "fastapi>=0.115,<1",

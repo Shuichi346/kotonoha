@@ -10,7 +10,7 @@ from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconne
 
 from backend.config import asr_ready, nemo_binary, translation_ready
 from backend.messages import header_language, localize, localize_event, ui_language
-from backend.pipeline import LiveSession
+from backend.pipeline import LiveSession, validate_commit_interval
 from backend.runtime import NemoRuntime, capture_permission
 from backend.translation import Translator
 
@@ -55,11 +55,14 @@ class SessionManager:
         self.session = None
         self.lock = asyncio.Lock()
 
-    async def start(self, owner, send, source, target):
+    async def start(self, owner, send, source, target, commit_interval_seconds=15):
+        commit_interval_seconds = validate_commit_interval(commit_interval_seconds)
         async with self.lock:
             if self.session and not self.session.task.done():
                 raise ValueError("別の字幕セッションが実行中です。先に停止してください。")
-            self.session = LiveSession(self.runtime, self.translator, send, source, target)
+            self.session = LiveSession(
+                self.runtime, self.translator, send, source, target, commit_interval_seconds
+            )
             self.session.owner = owner
             self.session.start()
             return self.session
@@ -142,7 +145,7 @@ def create_app(token: str | None = None, manager: SessionManager | None = None):
             },
             "translation": {
                 "ready": translation_ready(),
-                "detail": "TranslateGemma 4B · MLX 4-bit"
+                "detail": "Hy-MT2 1.8B · MLX 4-bit"
                 if translation_ready()
                 else "翻訳モデルがありません。npm run prepare:models を実行してください。",
             },
@@ -178,7 +181,10 @@ def create_app(token: str | None = None, manager: SessionManager | None = None):
                         source, target = message.get("source", "en"), message.get("target", "ja")
                         if source not in SOURCES or target not in TARGETS:
                             raise ValueError("対応していない言語です。")
-                        await sessions.start(owner, send, source, target)
+                        commit_interval_seconds = validate_commit_interval(
+                            message.get("commit_interval_seconds", 15)
+                        )
+                        await sessions.start(owner, send, source, target, commit_interval_seconds)
                     elif kind == "ui_language":
                         language = ui_language(message.get("ui_language"))
                     elif kind == "stop":

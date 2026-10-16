@@ -5,8 +5,9 @@ import shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-MODEL_ID = "mlx-community/translategemma-4b-it-4bit"
-MODEL_DIR = ROOT / "models" / "translation"
+MODEL_ID = "mlx-community/Hy-MT2-1.8B-4bit"
+MODEL_REVISION = "e5c6fe56c7b3bc77fae5ae92db31f2178f1e6912"
+MODEL_DIR = ROOT / "models" / "hy-mt2-1.8b-4bit"
 ASR_DIR = ROOT / "models" / "asr"
 CAPTURE = ROOT / "native" / "bin" / "audio-capture"
 ASR_PORT = 8766

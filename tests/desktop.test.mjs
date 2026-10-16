@@ -15,14 +15,31 @@ test('legacy settings migrate with Japanese UI and preserve subtitle preferences
   assert.equal(loadSettings(current).showOriginal, false);
   const value = { ...defaultSettings, fontSize: 56, source: 'fr', showOriginal: false };
   delete value.uiLanguage;
+  delete value.commitIntervalSeconds;
   const original = JSON.stringify(value);
   writeFileSync(old, original);
   const loaded = loadSettings(current, [old]);
   assert.equal(loaded.uiLanguage, 'ja'); assert.equal(loaded.fontSize, 56);
   assert.equal(loaded.source, 'fr'); assert.equal(loaded.showOriginal, false);
+  assert.equal(loaded.commitIntervalSeconds, 15);
   assert.equal(readFileSync(old, 'utf8'), original);
   writeFileSync(current, JSON.stringify({ ...loaded, uiLanguage: 'en' }));
   assert.equal(loadSettings(current, [old]).uiLanguage, 'en');
+});
+test('commit intervals persist and invalid values are rejected without replacing saved preferences', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'kotonoha-interval-'));
+  const file = path.join(dir, 'settings.json');
+  for (const seconds of [5, 10, 15, 20, 30]) {
+    const saved = validatedSettings({ ...defaultSettings, commitIntervalSeconds: seconds, fontSize: 42 });
+    writeFileSync(file, JSON.stringify(saved));
+    assert.equal(loadSettings(file).commitIntervalSeconds, seconds);
+    assert.equal(loadSettings(file).fontSize, 42);
+  }
+  const original = readFileSync(file, 'utf8');
+  for (const value of [0, 7, 60, 10.5, '10', null, true, NaN, Infinity]) {
+    assert.throws(() => validatedSettings({ ...defaultSettings, commitIntervalSeconds: value }), { code: 'commitIntervalRange' });
+  }
+  assert.equal(readFileSync(file, 'utf8'), original);
 });
 test('changing UI language preserves translation languages and rejects invalid caption values', () => {
   const settings = validatedSettings({ ...defaultSettings, uiLanguage: 'en' });
@@ -60,16 +77,23 @@ test('runtime staging is independent of the checkout and reuses only complete sn
   const { mkdirSync, symlinkSync, existsSync } = await import('node:fs');
   const dir = mkdtempSync(path.join(tmpdir(), 'kotonoha-runtime-'));
   const source = path.join(dir, 'Documents/source');
-  for (const name of ['backend', '.venv/bin', 'models', 'native/bin']) mkdirSync(path.join(source, name), { recursive: true });
-  for (const name of ['backend/app.py', '.venv/pyvenv.cfg', 'native/bin/audio-capture', 'models/fixture']) writeFileSync(path.join(source, name), name);
+  for (const name of ['backend', '.venv/bin', 'models/asr', 'models/hy-mt2-1.8b-4bit', 'models/translation', 'native/bin']) mkdirSync(path.join(source, name), { recursive: true });
+  for (const name of ['backend/app.py', '.venv/pyvenv.cfg', 'native/bin/audio-capture', 'models/asr/model.gguf', 'models/hy-mt2-1.8b-4bit/model.safetensors', 'models/translation/old.safetensors']) writeFileSync(path.join(source, name), name);
   symlinkSync(process.execPath, path.join(source, '.venv/bin/python'));
   const installed = stageRuntime(source, path.join(dir, 'Application Support/runtime'));
   assert(!installed.root.startsWith(source));
   assert.equal(readFileSync(path.join(installed.root, 'backend/app.py'), 'utf8'), 'backend/app.py');
   assert(existsSync(path.join(installed.root, '.complete.json')));
+  assert(existsSync(path.join(installed.root, 'models/asr/model.gguf')));
+  assert(existsSync(path.join(installed.root, 'models/hy-mt2-1.8b-4bit/model.safetensors')));
+  assert(!existsSync(path.join(installed.root, 'models/translation')));
   assert.deepEqual(stageRuntime(source, path.join(dir, 'Application Support/runtime')), installed);
+  writeFileSync(path.join(source, 'models/translation/old.safetensors'), 'unselected model changed');
+  assert.deepEqual(stageRuntime(source, path.join(dir, 'Application Support/runtime')), installed);
+  writeFileSync(path.join(source, 'models/hy-mt2-1.8b-4bit/model.safetensors'), 'selected model changed');
+  assert.notEqual(stageRuntime(source, path.join(dir, 'Application Support/runtime')).revision, installed.revision);
   assert.throws(() => stageRuntime(source, path.join(source, 'runtime')), /outside the checkout/);
-  symlinkSync(path.join(source, 'models/fixture'), path.join(source, 'models/unsafe'));
+  symlinkSync(path.join(source, 'models/asr/model.gguf'), path.join(source, 'models/asr/unsafe'));
   assert.throws(() => stageRuntime(source, path.join(dir, 'other')), /depends on the checkout/);
 });
 

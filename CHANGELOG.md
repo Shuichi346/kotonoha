@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added a Settings tab with the interface Language selector and a saved 5/10/15/20/30-second finalization request interval, applied on the next translation start with the existing 15-second default.
 - Added a Japanese/English first-use audio permission guide with separate permission, confirmation, and translation actions, settings access, and retry guidance.
 - Added an arm64 macOS app with independent transparent, always-on-top translated subtitles and a separate control window.
 - Added system-output capture through ScreenCaptureKit, streaming NeMo transcription, and local MLX TranslateGemma translation.
@@ -13,6 +14,8 @@
 
 ### Changed
 
+- Replaced TranslateGemma 4B with the pinned Hy-MT2 1.8B MLX 4bit model, its native translation prompt/EOS, recommended sampling settings, and a 512-token subtitle cap with localized overflow errors.
+- Updated model readiness labels and preparation, and limited new runtime snapshots to the selected translator and ASR model while retaining previous models and app builds.
 - Reduced the initial controller to at most 480×640 and placed it in a separate band above subtitles, adapting to the display work area.
 - Explicitly enabled regular macOS Dock/menu behavior and application activation when restoring controls through a user action.
 - Changed new subtitle defaults to 30 px with original text off, preserved saved preferences, and enabled the locked subtitle window on normal startup.

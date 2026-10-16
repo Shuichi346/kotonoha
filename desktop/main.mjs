@@ -135,7 +135,7 @@ const captureActions = createCaptureActions({
     setLocked(true); setOverlay(false); latest = null; broadcast({ type: 'clear' });
     statusEvent({ type: 'status', state: 'starting' });
     try {
-      socket.send(JSON.stringify({ type: 'start', source: settings.source, target: settings.target, ui_language: settings.uiLanguage }));
+      socket.send(JSON.stringify({ type: 'start', source: settings.source, target: settings.target, ui_language: settings.uiLanguage, commit_interval_seconds: settings.commitIntervalSeconds }));
     } catch (error) {
       statusEvent({ type: 'status', state: 'stopped' });
       throw error;

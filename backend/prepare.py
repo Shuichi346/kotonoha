@@ -4,7 +4,7 @@ import argparse
 import os
 import subprocess
 
-from backend.config import ASR_DIR, MODEL_DIR, MODEL_ID, nemo_binary
+from backend.config import ASR_DIR, MODEL_DIR, MODEL_ID, MODEL_REVISION, nemo_binary
 
 
 def main():
@@ -24,6 +24,7 @@ def main():
     # Exclude training/source artifacts; all model and tokenizer files remain available offline.
     snapshot_download(
         MODEL_ID,
+        revision=MODEL_REVISION,
         local_dir=str(MODEL_DIR),
         allow_patterns=["*.json", "*.jinja", "*.model", "*.safetensors", "README.md"],
     )

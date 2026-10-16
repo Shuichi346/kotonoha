@@ -56,7 +56,7 @@ async def check(path: Path, source: str, target: str):
             raise RuntimeError("Real ASR produced no transcript")
         await translator.load()
         translated = await translator.translate(text, source, target)
-        if "<end_of_turn>" in translated:
+        if "<｜hy_" in translated or "<end_of_turn>" in translated:
             raise RuntimeError("Translation leaked a model turn terminator")
         if not translated:
             raise RuntimeError("Real translation produced no text")

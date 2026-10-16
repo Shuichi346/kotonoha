@@ -110,7 +110,8 @@ def test_authentication_and_status(monkeypatch):
             assert socket.receive_json()["type"] == "error"
 
 
-async def test_stop_commits_final_utterance_and_translates_before_stopped():
+@pytest.mark.parametrize("commit_interval_seconds", [5, 10, 15, 20, 30])
+async def test_stop_commits_final_utterance_and_translates_before_stopped(commit_interval_seconds):
     events = []
     runtime = FakeRuntime()
     listening = asyncio.Event()
@@ -120,7 +121,7 @@ async def test_stop_commits_final_utterance_and_translates_before_stopped():
         if event.get("state") == "listening":
             listening.set()
 
-    session = LiveSession(runtime, FakeTranslator(), send, "en", "ja")
+    session = LiveSession(runtime, FakeTranslator(), send, "en", "ja", commit_interval_seconds)
     session.start()
     await asyncio.wait_for(listening.wait(), 2)
     await asyncio.wait_for(session.stop(), 2)
@@ -131,6 +132,102 @@ async def test_stop_commits_final_utterance_and_translates_before_stopped():
     assert events[-1] == {"type": "status", "state": "stopped"}
     assert runtime.stopped
     assert b"\x01\x00\x02\x00" in runtime.socket.sent
+    configuration = json.loads(runtime.socket.sent[0])
+    assert configuration["session"]["endpointing_ms"] == 600
+    assert [json.loads(item)["type"] for item in runtime.socket.sent if isinstance(item, str)] == [
+        "session.update",
+        "input_audio_buffer.commit",
+    ]
+
+
+@pytest.mark.parametrize("commit_interval_seconds", [None, 5, 10, 15, 20, 30])
+async def test_periodic_commit_tracks_selected_pcm_duration(commit_interval_seconds):
+    interval = 15 if commit_interval_seconds is None else commit_interval_seconds
+    options = {} if commit_interval_seconds is None else {"commit_interval_seconds": interval}
+    session = LiveSession(FakeRuntime(), FakeTranslator(), AsyncMock(), "en", "ja", **options)
+    session.stopping.set()
+    process = type("Process", (), {})()
+    process.stdout = asyncio.StreamReader()
+    process.stdout.feed_data(bytes(2 * interval * 32000 + 2))
+    process.stdout.feed_eof()
+    audio_bytes = 0
+    commit_positions = []
+
+    async def record(message):
+        nonlocal audio_bytes
+        if isinstance(message, bytes):
+            audio_bytes += len(message)
+        else:
+            assert json.loads(message) == {"type": "input_audio_buffer.commit"}
+            commit_positions.append(audio_bytes)
+
+    socket = type("Socket", (), {})()
+    socket.send = record
+    await asyncio.wait_for(session.stream_audio(process, socket), 2)
+    assert commit_positions == [interval * 32000, 2 * interval * 32000]
+    assert audio_bytes == 2 * interval * 32000 + 2
+    assert session._commits_sent == 2
+
+
+@pytest.mark.parametrize("value", [True, False, 10.0, "10", None, 0, -5, 6, 31, [], {}])
+async def test_session_rejects_invalid_commit_interval_before_starting(value):
+    manager = SessionManager(FakeRuntime(), FakeTranslator())
+    with pytest.raises(ValueError, match="確定要求の間隔"):
+        await manager.start(object(), AsyncMock(), "en", "ja", value)
+    assert manager.session is None
+    with pytest.raises(ValueError, match="確定要求の間隔"):
+        LiveSession(manager.runtime, manager.translator, AsyncMock(), "en", "ja", value)
+
+
+@pytest.mark.parametrize("commit_interval_seconds", [None, 5, 10, 15, 20, 30])
+def test_websocket_start_forwards_commit_interval(commit_interval_seconds):
+    runtime = FakeRuntime()
+    runtime.capture = AsyncMock()
+    manager = SessionManager(runtime, FakeTranslator())
+    manager.start = AsyncMock()
+    with TestClient(create_app("secret", manager)) as client:
+        with client.websocket_connect("/api/live?token=secret") as socket:
+            message = {"type": "start", "source": "ja", "target": "en"}
+            if commit_interval_seconds is not None:
+                message["commit_interval_seconds"] = commit_interval_seconds
+            socket.send_json(message)
+            # The next error synchronizes processing of the preceding start message.
+            socket.send_json({"type": "invalid"})
+            assert socket.receive_json()["type"] == "error"
+            manager.start.assert_awaited_once()
+            assert manager.start.await_args.args[2:] == (
+                "ja",
+                "en",
+                15 if commit_interval_seconds is None else commit_interval_seconds,
+            )
+            runtime.capture.assert_not_awaited()
+
+
+@pytest.mark.parametrize("value", [True, False, 10.0, "10", None, 0, -5, 6, 31, [], {}])
+@pytest.mark.parametrize("language", ["ja", "en"])
+def test_websocket_rejects_invalid_commit_interval_before_session_creation(value, language):
+    manager = SessionManager(FakeRuntime(), FakeTranslator())
+    manager.start = AsyncMock()
+    with TestClient(create_app("secret", manager)) as client:
+        with client.websocket_connect("/api/live?token=secret") as socket:
+            socket.send_json(
+                {
+                    "type": "start",
+                    "source": "ja",
+                    "target": "en",
+                    "ui_language": language,
+                    "commit_interval_seconds": value,
+                }
+            )
+            assert socket.receive_json() == {
+                "type": "error",
+                "message": (
+                    "Choose a commit request interval of 5, 10, 15, 20, or 30 seconds."
+                    if language == "en"
+                    else "確定要求の間隔は5、10、15、20、30秒から選択してください。"
+                ),
+            }
+            manager.start.assert_not_awaited()
 
 
 async def test_queue_bounds_latency_and_keeps_newest_utterance():
@@ -171,17 +268,16 @@ async def test_translation_failure_is_reported_and_capture_is_released():
     assert events[-1]["state"] == "stopped"
 
 
-def test_translategemma_structured_prompt():
+def test_hy_mt2_translation_prompt():
     message = translation_messages("Hello", "en", "ja")[0]
     assert message == {
         "role": "user",
-        "content": [
-            {"type": "text", "source_lang_code": "en", "target_lang_code": "ja", "text": "Hello"}
-        ],
+        "content": "Translate the following text into Japanese. Note that you should only "
+        "output the translated result without any additional explanation:\n\nHello",
     }
 
 
-def test_community_model_turn_terminator_is_a_stop_token(monkeypatch):
+def test_hy_mt2_preserves_checkpoint_stop_tokens(monkeypatch):
     import sys
     from types import SimpleNamespace
     from unittest.mock import Mock
@@ -195,7 +291,7 @@ def test_community_model_turn_terminator_is_a_stop_token(monkeypatch):
     monkeypatch.setattr("backend.translation.translation_ready", lambda: True)
     translator = Translator()
     translator._load()
-    tokenizer.add_eos_token.assert_called_once_with("<end_of_turn>")
+    tokenizer.add_eos_token.assert_not_called()
     translator.close()
 
 
