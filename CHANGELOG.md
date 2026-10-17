@@ -2,8 +2,13 @@
 
 ## 2026-10-17
 
+### Added
+
+- Added `scripts/build-app.sh` to check tools and compatibility, install locked dependencies, prepare shared models, build a separate local app, and verify arm64 support in one invocation; added `--check` for diagnostics only.
+
 ### Changed
 
+- Moved local app packaging before installation/launch in both READMEs and documented the single-command workflow and generated-artifact startup check.
 - Renamed the local repository folder to kotonoha, repaired virtual-environment paths, and aligned the Python project name and README clone directory examples.
 
 ## 2026-10-16

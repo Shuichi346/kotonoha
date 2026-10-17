@@ -25,7 +25,7 @@ YouTubeやブラウザ、普段使っている動画プレーヤーでそのま�
 
 コンパクトなコントローラーと字幕ウィンドウは独立しています。字幕がないときは薄いグレーのガイドで字幕領域を示し、再生中はウィンドウの周囲が透明になります。
 
-[主な機能](#主な機能) · [セットアップ](#セットアップ) · [使い方](#使い方) · [ローカルアプリのパッケージ](#ローカルアプリのパッケージ) · [開発](#開発)
+[主な機能](#主な機能) · [セットアップ](#セットアップ) · [ローカルアプリのパッケージ](#ローカルアプリのパッケージ) · [使い方](#使い方) · [開発](#開発)
 
 ## 主な機能
 
@@ -81,36 +81,43 @@ NeMo未導入の場合は、[公式インストーラー](https://github.com/NVI
 curl -fsSL https://github.com/NVIDIA/NeMo-Speech.cpp/raw/main/scripts/install.sh | sh
 ```
 
-新しいターミナルを開き、次を確認してください。
+下記のビルドスクリプトでarm64版であることとMetal対応を確認します。NeMoは0.2.0で動作確認済みです。アプリはインストール済みCLIを`PATH`、`~/.local/bin/nemo-speech`の順で探し、別のNeMoをビルド・同梱しません。標準以外の場所に導入した場合は`NEMO_SPEECH_BIN`に実行ファイルの絶対パスを指定できます。ソースから導入してモデル索引が`<実体の実行ファイルのprefix>/share/nemo-speech/model-index.json`にない場合は、`NEMO_SPEECH_MODEL_INDEX`にも索引の絶対パスを指定してください。
 
-```sh
-git --version
-xcrun swift --version
-node --version
-npm --version
-uv --version
-nemo-speech --version
-nemo-speech doctor
-```
+### ローカルアプリのパッケージ
 
-arm64版であることとMetal対応を確認します。NeMoは0.2.0で動作確認済みです。アプリはインストール済みCLIを`PATH`、`~/.local/bin/nemo-speech`の順で探し、別のNeMoをビルド・同梱しません。標準以外の場所に導入した場合は`NEMO_SPEECH_BIN`に実行ファイルの絶対パスを指定できます。ソースから導入してモデル索引が`<実体の実行ファイルのprefix>/share/nemo-speech/model-index.json`にない場合は、`NEMO_SPEECH_MODEL_INDEX`にも索引の絶対パスを指定してください。
-
-### インストールと起動
-
-GitHubの**Code**メニューからこのリポジトリのclone URLをコピーし、次の`REPOSITORY_URL`を置き換えて実行します。
+上記のツールを準備したら、GitHubの**Code**メニューからこのリポジトリのclone URLをコピーし、次の`REPOSITORY_URL`を置き換えて実行します。
 
 ```sh
 git clone REPOSITORY_URL kotonoha
 cd kotonoha
-npm ci
-npm run setup:electron
-uv sync --locked
-npm run build:native
-npm run prepare:models
-npm start
+./scripts/build-app.sh
 ```
 
-コミット済みの`package-lock.json`と`uv.lock`を使用してください。`npm start`はフロントエンドの型を確認して画面をビルドし、Electronを起動します。
+このスクリプト1本で、環境チェック、`package-lock.json`と`uv.lock`に従った依存関係の導入、ElectronとPython 3.13の準備、`npm run prepare:models`によるモデル準備、画面・ネイティブヘルパー・`.app`のビルド、arm64対応の検証まで実行します。初回はインターネット接続が必要です。保存済みのモデルは再利用します。
+
+環境チェックでは、`git --version`、`xcrun swift --version`、`node --version`、`npm --version`、`uv --version`、`nemo-speech --version`、`nemo-speech doctor`を実行します。macOS 26以降、arm64で動作するターミナルとツールチェーン、macOS 26以降のSDK、Node.js 26.5以降、npm 12.0.1以降、NeMoのarm64・Metal対応も判定します。不足や非対応があれば依存関係の導入前に停止します。Xcode・Node.js・uv・NeMo自体は上記の手順で事前に導入してください。環境チェックだけ行う場合は、次を使います。依存関係の導入やモデルのダウンロードは行いません。
+
+```sh
+./scripts/build-app.sh --check
+```
+
+生成先は`release/build-<日時>-<プロセスID>/kotonoha-darwin-arm64/kotonoha.app`で、完了時にフルパスを表示します。以前のアプリは残します。スクリプトはアプリの起動や録音許可の要求を行いません。依存関係とモデルの準備済み環境では、従来の個別コマンド`npm run package`も使えます。既定の生成先は`release/kotonoha-darwin-arm64/kotonoha.app`で、その後に`npm run check:architecture`を実行します。
+
+パッケージ化では、Python環境、バックエンド、ネイティブ音声取り込みヘルパーを、次の場所にあるバージョン別スナップショットに格納します。
+
+```text
+~/Library/Application Support/kotonoha/runtime/
+```
+
+アプリ内の`Contents/Resources/runtime.json`が使用するスナップショットを選択します。パッケージ版の起動時にソースチェックアウト内の依存関係は読み込まれません。`.app`を移動しても、選択されたスナップショット、インストール済みのベースPython、NeMo実行ファイルとモデル索引、共有モデルキャッシュは残してください。バックエンドコード、Python依存関係、ネイティブヘルパーを変更した場合は再パッケージ化します。翻訳モデルの固定リビジョンを変更した場合もモデル準備と再パッケージ化が必要です。新しいスナップショットにモデルの重みは含まれません。古いスナップショットとモデルは保持します。他の利用者も、それぞれのMacでclone・事前準備・ビルドを行ってください。
+
+### インストールと起動
+
+スクリプトが正常終了したら、生成された`kotonoha.app`を同じMacの`/Applications`へ移動します。起動中のkotonohaを終了してから、新しいアプリをFinderで開いてください。`/Applications`の既存アプリを置き換える場合は、新しいビルドの動作を確認するまで以前のコピーを残してください。
+
+開発時は、スクリプトで依存関係とモデルを準備した後、チェックアウト内で`npm start`を実行できます。フロントエンドの型を確認して画面をビルドし、Electronを起動します。
+
+### 共有モデルキャッシュ
 
 `npm run prepare:models`は次の共有キャッシュを準備し、保存済みファイルを再利用します。モデルのパスを手動指定する必要はありません。使用する2モデルは合計約1.7 GiBで、ほかに依存関係とアプリのビルド用の空き容量が必要です。利用条件は各モデルカードを確認してください。
 
@@ -167,25 +174,6 @@ npm start
 
 音声認識と翻訳には誤りが生じることがあります。特に人名、数値、アクセント、複数人の重なった発話、専門用語では誤りやすくなります。SRT書き出しの時刻はセッション内の概算で、元動画ファイルとは同期されません。アプリは音声を自動録音したり、文字起こしを自動保存したりしません。必要な場合は終了前に履歴を書き出してください。
 
-## ローカルアプリのパッケージ
-
-セットアップとモデル準備の後、次を実行します。
-
-```sh
-npm run package
-npm run check:architecture
-```
-
-ビルドによって`release/kotonoha-darwin-arm64/kotonoha.app`が作成されます。同じMac内なら`/Applications`へ移動して使えます。ほかのkotonohaビルドを終了してから、Finderで開いてください。
-
-パッケージ化では、Python環境、バックエンド、ネイティブ音声取り込みヘルパーを、次の場所にあるバージョン別スナップショットに格納します。
-
-```text
-~/Library/Application Support/kotonoha/runtime/
-```
-
-アプリ内の`Contents/Resources/runtime.json`が使用するスナップショットを選択します。パッケージ版の起動時にソースチェックアウト内の依存関係は読み込まれません。`.app`を移動しても、選択されたスナップショット、インストール済みのベースPython、NeMo実行ファイルとモデル索引、共有モデルキャッシュは残してください。バックエンドコード、Python依存関係、ネイティブヘルパーを変更した場合は再パッケージ化します。翻訳モデルの固定リビジョンを変更した場合もモデル準備と再パッケージ化が必要です。新しいスナップショットにモデルの重みは含まれません。古いスナップショットとモデルは保持します。他の利用者も、それぞれのMacでclone・事前準備・ビルドを行ってください。
-
 ## 開発
 
 ### アーキテクチャ
@@ -216,7 +204,7 @@ Electronのメインプロセスがローカルサービスの認証情報を管
 npm run build
 npx playwright install chromium
 npm test
-node --test tests/desktop.test.mjs
+node --test tests/*.test.mjs
 uv run --locked python -m pytest -q
 uv run --locked ruff check backend
 uv run --locked ruff format --check backend
@@ -225,11 +213,10 @@ uv run --locked ruff format --check backend
 
 スクリプトによるUIテストの前にChromiumを一度インストールしてください。フロントエンドのスクリプトはビルドとテストの実行時間に上限を設けています。ネイティブ検証では、アクセス許可の要求や音声の取り込みを行わず、ビルド、アーキテクチャ、リサンプラー、許可状態を確認します。
 
-パッケージ化した後、次のコマンドでアプリを確認します。
+arm64対応はビルドスクリプト内で検証します。追加で非表示の起動チェックを行う場合は、次の`/full/path/to/kotonoha.app`を、スクリプトが表示したアプリのパスに置き換えてください。
 
 ```sh
-npm run check:architecture
-node scripts/smoke-desktop.mjs
+KOTONOHA_SMOKE_APP="/full/path/to/kotonoha.app/Contents/MacOS/kotonoha" node scripts/smoke-desktop.mjs
 ```
 
 非表示のデスクトップスモークテストは一時プロファイルとポート**8767**を使い、起動とIPCを確認します。音声取り込みが始まる前にStartを捕捉するため、実際の音声配信やmacOSの許可ダイアログ操作は検証しません。

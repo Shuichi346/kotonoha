@@ -1,5 +1,11 @@
 # Notes
 
+## One-command app builder — 2026-10-17
+
+`scripts/build-app.sh` bootstraps from Bash so missing or unsupported Node/npm can be diagnosed before invoking project JavaScript. Tool probes retain stderr separately from parsed stdout: Xcode can emit a successful SDK version alongside an unrelated stderr warning. Diagnostics have 30-second limits and complete before dependency installation. NeMo discovery follows the backend's explicit path/PATH/user-local fallback and checks its compiled Metal feature and arm64 executable. Python 3.13 arm64 is checked after uv sync; force the project `.venv` because runtime staging reads that directory.
+
+The builder reuses existing npm/uv/package commands, calls explicit `npm run prepare:models`, preserves shared caches, and produces a timestamp/PID output under `release/` rather than overwriting previous apps. An explicitly selected output containing an app is rejected. Architecture checks receive the generated app path through `KOTONOHA_CHECK_APP`; optional startup smoke must similarly receive `KOTONOHA_SMOKE_APP`. The builder does not launch the app or request capture permission. Command-stub regressions in `tests/build-app.test.mjs` cover prerequisite rejection, supported version boundaries, NeMo overrides with spaces, locked setup ordering, fail-fast behavior, existing-app preservation, and incomplete bundles. Acceptance results and the generated artifact path are in PLANS.md.
+
 ## Local checkout name — 2026-10-17
 
 The checkout is now `/Users/shuichi/Documents/GitHub/kotonoha`. This is a local-only repository with no configured remote; do not infer a GitHub URL from the account name. Python project metadata and both README clone directory examples use kotonoha. Moving the checkout required updating the existing virtual environment’s generated interpreter and activation paths; the global base interpreter and shared caches remain in place. Existing Git history, ignored models, and app artifacts were preserved. Build, desktop/backend tests, lockfile consistency, and Ruff checks passed after relocation; PLANS.md holds acceptance evidence. Reopen the new directory in editors/Codex that retain the former path.

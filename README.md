@@ -25,7 +25,7 @@ Built for **Apple silicon Macs running macOS 26 or later**. Transcription and tr
 
 The compact controller and subtitle window are independent. The light-gray guide shows the subtitle area while it is empty; during playback, the surrounding window is transparent.
 
-[Features](#features) · [Setup](#setup) · [Usage](#usage) · [Local app packaging](#local-app-packaging) · [Development](#development)
+[Features](#features) · [Setup](#setup) · [Local app packaging](#local-app-packaging) · [Usage](#usage) · [Development](#development)
 
 ## Features
 
@@ -81,36 +81,43 @@ Install the Metal-enabled arm64 CLI using the [official NeMo-Speech.cpp installe
 curl -fsSL https://github.com/NVIDIA/NeMo-Speech.cpp/raw/main/scripts/install.sh | sh
 ```
 
-Open a new terminal, then check the tools:
+The build script below checks arm64 and Metal support. NeMo 0.2.0 is the tested version. The app reuses the installed CLI, checking `PATH` and then `~/.local/bin/nemo-speech`; it does not build or bundle another copy. For a nonstandard installation, set `NEMO_SPEECH_BIN` to its absolute executable path. Source builds must also provide the model index via `NEMO_SPEECH_MODEL_INDEX` if it is not at `<resolved executable prefix>/share/nemo-speech/model-index.json`.
 
-```sh
-git --version
-xcrun swift --version
-node --version
-npm --version
-uv --version
-nemo-speech --version
-nemo-speech doctor
-```
+### Local app packaging
 
-Confirm an arm64 installation and Metal support. NeMo 0.2.0 is the tested version. The app reuses the installed CLI, checking `PATH` and then `~/.local/bin/nemo-speech`; it does not build or bundle another copy. For a nonstandard installation, set `NEMO_SPEECH_BIN` to its absolute executable path. Source builds must also provide the model index via `NEMO_SPEECH_MODEL_INDEX` if it is not at `<resolved executable prefix>/share/nemo-speech/model-index.json`.
-
-### Install and launch
-
-Copy this repository's clone URL from GitHub's **Code** menu. Replace `REPOSITORY_URL` below with that URL:
+After preparing the tools above, copy this repository's clone URL from GitHub's **Code** menu and replace `REPOSITORY_URL` below:
 
 ```sh
 git clone REPOSITORY_URL kotonoha
 cd kotonoha
-npm ci
-npm run setup:electron
-uv sync --locked
-npm run build:native
-npm run prepare:models
-npm start
+./scripts/build-app.sh
 ```
 
-Use the committed `package-lock.json` and `uv.lock`. `npm start` checks frontend types, builds the interface, and launches Electron.
+This single script checks the environment, installs dependencies from `package-lock.json` and `uv.lock`, prepares Electron and Python 3.13, runs `npm run prepare:models`, builds the frontend/native helper and `.app`, and verifies arm64 support. Initial setup requires an internet connection. Cached models are reused.
+
+The checks run `git --version`, `xcrun swift --version`, `node --version`, `npm --version`, `uv --version`, `nemo-speech --version`, and `nemo-speech doctor`. They also validate macOS 26+, a native arm64 terminal/toolchain, a macOS 26+ SDK, Node.js 26.5+, npm 12.0.1+, and arm64/Metal support in NeMo. Missing or unsupported tools stop the script before dependency installation. Install the system tools using the instructions above; the script does not install Xcode, Node.js, uv, or NeMo for you. To check only, without installing dependencies or downloading models:
+
+```sh
+./scripts/build-app.sh --check
+```
+
+Each build creates `release/build-<timestamp>-<process-id>/kotonoha-darwin-arm64/kotonoha.app` and prints its full path. Previous app builds are preserved. The script does not launch the app or request recording access. After dependencies and models are prepared, `npm run package` remains available as the lower-level build command, using `release/kotonoha-darwin-arm64/kotonoha.app` by default; run `npm run check:architecture` afterward.
+
+Packaging stages the Python environment, backend, and native capture helper into versioned snapshots under:
+
+```text
+~/Library/Application Support/kotonoha/runtime/
+```
+
+`Contents/Resources/runtime.json` inside the app selects its snapshot. Packaged startup does not read dependencies from the source checkout. Keep the selected snapshot, installed base Python, NeMo executable and model index, and shared model caches available on this Mac, even after moving the `.app`. Repackage after changing backend code, Python dependencies, or the native helper. A changed translator revision also needs model preparation and repackaging. New snapshots contain no model weights; older snapshots and model folders remain untouched. Other users follow the clone/setup/build steps on their own Macs.
+
+### Install and launch
+
+After the script succeeds, move the generated `kotonoha.app` to `/Applications` on the same Mac. Quit any running kotonoha build, then open the new app in Finder. If replacing an app already in `/Applications`, keep the previous copy until the new build is confirmed working.
+
+For development, run `npm start` from the checkout after the script has prepared dependencies and models. It checks frontend types, builds the interface, and launches Electron.
+
+### Shared model caches
 
 `npm run prepare:models` prepares the shared caches below, reusing files already present. No manual model-path selection is needed. The two active models total approximately 1.7 GiB; allow additional space for dependencies and app builds. Refer to each model card for its terms.
 
@@ -167,25 +174,6 @@ The finalization interval offers **5, 10, 15, 20, or 30 seconds**, defaults to *
 
 Speech recognition and translation can make mistakes, especially with names, numbers, accents, overlapping voices, or specialized language. SRT exports use an approximate session timeline and are not synchronized to a source video file. The app does not automatically record audio or save transcripts; export history before quitting if you need it.
 
-## Local app packaging
-
-After setup and model preparation:
-
-```sh
-npm run package
-npm run check:architecture
-```
-
-The build creates `release/kotonoha-darwin-arm64/kotonoha.app`. You may move this app into `/Applications` on the same Mac and open it in Finder after quitting any other kotonoha build.
-
-Packaging stages the Python environment, backend, and native capture helper into versioned snapshots under:
-
-```text
-~/Library/Application Support/kotonoha/runtime/
-```
-
-`Contents/Resources/runtime.json` inside the app selects its snapshot. Packaged startup does not read dependencies from the source checkout. Keep the selected snapshot, installed base Python, NeMo executable and model index, and shared model caches available on this Mac, even after moving the `.app`. Repackage after changing backend code, Python dependencies, or the native helper. A changed translator revision also needs model preparation and repackaging. New snapshots contain no model weights; older snapshots and model folders remain untouched. Other users follow the clone/setup/build steps on their own Macs.
-
 ## Development
 
 ### Architecture
@@ -216,7 +204,7 @@ Electron main owns the local service credentials. The Python service listens on 
 npm run build
 npx playwright install chromium
 npm test
-node --test tests/desktop.test.mjs
+node --test tests/*.test.mjs
 uv run --locked python -m pytest -q
 uv run --locked ruff check backend
 uv run --locked ruff format --check backend
@@ -225,11 +213,10 @@ uv run --locked ruff format --check backend
 
 Install Chromium once before running the scripted UI tests. The frontend scripts enforce finite build and test limits. Native verification checks the build, architecture, resampler, and permission status without requesting access or capturing audio.
 
-After packaging, check the actual app with:
+The builder already verifies architecture. For an optional hidden startup check, replace `/full/path/to/kotonoha.app` below with the app path printed by the builder:
 
 ```sh
-npm run check:architecture
-node scripts/smoke-desktop.mjs
+KOTONOHA_SMOKE_APP="/full/path/to/kotonoha.app/Contents/MacOS/kotonoha" node scripts/smoke-desktop.mjs
 ```
 
 The hidden desktop smoke uses a temporary profile and port **8767**, checks startup and IPC, and intercepts Start before capture. It does not verify real audio delivery or macOS permission-dialog interaction.

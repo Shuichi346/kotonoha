@@ -84,8 +84,20 @@ This is the single authoritative implementation and acceptance checklist. The or
 - [x] RN1 — Align README clone folders and Python project metadata with kotonoha.
 - [x] RNV1 — Rename the local checkout to kotonoha, repair generated virtual-environment paths, and verify the relocated project.
 
-Current: Complete — the local checkout is `/Users/shuichi/Documents/GitHub/kotonoha`. GitHub publication has not occurred and no remote is configured.
+- [x] B1 — Add a single-command local app builder with prerequisite diagnostics, locked dependency setup, explicit model preparation, packaging, and architecture verification.
+- [x] BV1 — Verify prerequisite failures and build sequencing without capture, then run the builder and inspect the resulting arm64 app.
+- [x] BD1 — Move local packaging before installation/launch in both READMEs and record final evidence.
+
+Current: Complete — the one-command builder produced and verified a separate arm64 app; both READMEs place packaging before installation/launch.
 Next: None.
+
+## One-command Local App Build — 2026-10-17
+
+Add `scripts/build-app.sh` so a cloned checkout needs one build invocation after system tools are installed. Run the requested tool versions and NeMo doctor before dependency installation, validate macOS 26+/native arm64, Node 26.5+/npm 12.0.1+, Swift/macOS SDK and Metal availability, and provide a diagnostics-only mode. Reuse committed lockfiles and the existing explicit model-preparation, package, runtime-staging, and architecture commands. Preserve existing apps with a separate build output directory. Do not launch the app, request recording permission, or capture audio. Keep both README language versions aligned and place local packaging before installation/launch. Verification is bounded to shell syntax, focused command-stub tests, the real diagnostics, a full builder execution, arm64 inspection, and the existing hidden packaged startup smoke; unchanged UI/audio/inference behavior reuses prior evidence.
+
+B1/BV1: shell syntax, real prerequisite diagnostics, seven focused orchestration tests (including twelve incompatible-tool cases), and thirteen existing desktop tests passed. The initial diagnostics parser incorrectly included an Xcode stderr warning in the SDK version; separating stderr fixed it. The first test execution found an escaped-template fixture syntax error; its repair passed. The complete builder passed on its first execution: `npm ci`, explicit Electron setup, locked Python 3.13.11 arm64 sync, shared model preparation, frontend type/build, native compilation, separate packaging, and architecture checks (33 bundled Mach-O components plus Python/NeMo). No dependency or lockfile changes occurred. npm reported blocked optional fsevents installation and the packager reported an absent optional `.icon` format; neither prevented completion, and the actual tracked ICNS bytes were verified in the generated app.
+
+The app is `release/build-20261017-135309-82993/kotonoha-darwin-arm64/kotonoha.app`, selecting Application Support runtime `bfc42d48ea90cad5`. Inspection confirmed the macOS minimum/regular-app metadata, tracked icon, exact staged backend/config/helper bytes, and no staged models. Hidden temporary-profile startup passed on its first execution with two windows, both shared models ready, authenticated IPC, stopped capture, and zero renderer errors. No recording, permission request, user-profile change, or `/Applications` replacement occurred. BD1: both README headings and build/check commands were checked against implementation; optional smoke instructions now select the actual generated app. Unchanged UI, backend inference, and native DSP reuse their prior acceptance evidence.
 
 ## Local Repository Rename — 2026-10-17
 
