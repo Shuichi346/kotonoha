@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Automatically selected five backup ports per local service when the primary port was occupied; updated all HTTP/WebSocket connections to the selected ports and replaced old-app conflict guidance with localized exhaustion instructions.
 - Enlarged initial and retry permission requests into full-width red buttons and moved retry above auxiliary actions.
 - Centered tab labels within visible 44 px high click targets and removed invisible spacing from empty history counts; retained keyboard navigation.
 

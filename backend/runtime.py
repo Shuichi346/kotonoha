@@ -9,7 +9,8 @@ from urllib.parse import urlencode
 import httpx
 from websockets.asyncio.client import connect
 
-from backend.config import ASR_MODEL, ASR_PORT, CAPTURE, asr_ready, nemo_binary
+from backend.config import ASR_MODEL, CAPTURE, asr_ready, nemo_binary
+from backend.ports import ASR_PORTS, PortsUnavailableError, bind_first_available
 
 
 class CapturePermissionError(RuntimeError):
@@ -80,6 +81,7 @@ class NemoRuntime:
     def __init__(self):
         self.process = None
         self.capture_process = None
+        self.port = None
         self.key = secrets.token_urlsafe(32)
         self._log_task = None
         self.last_error = ""
@@ -99,6 +101,45 @@ class NemoRuntime:
             raise RuntimeError(
                 "文字起こしモデルがありません。npm run prepare:models を実行してください。"
             )
+        try:
+            # One deadline covers all candidates, including a bind race in the external CLI.
+            async with asyncio.timeout(60):
+                for port in ASR_PORTS:
+                    try:
+                        with bind_first_available((port,)):
+                            pass
+                    except PortsUnavailableError:
+                        continue
+                    self.port = port
+                    self.last_error = ""
+                    await self._launch(binary)
+                    if await self._wait_ready():
+                        return
+                    # The CLI cannot inherit our probe socket. Retry only a confirmed bind
+                    # conflict, including another process claiming the port after the probe.
+                    conflict = any(
+                        phrase in self.last_error.lower()
+                        for phrase in ("address already in use", "eaddrinuse", "addrinuse")
+                    )
+                    if not conflict:
+                        try:
+                            with bind_first_available((port,)):
+                                pass
+                        except PortsUnavailableError:
+                            conflict = True
+                    detail = self.last_error[-600:]
+                    await self.close()
+                    if not conflict:
+                        raise RuntimeError(f"NeMo を起動できません: {detail}")
+                raise PortsUnavailableError(ASR_PORTS)
+        except TimeoutError as error:
+            await self.close()
+            raise RuntimeError("NeMo の起動が60秒以内に完了しませんでした。") from error
+        except BaseException:
+            await self.close()
+            raise
+
+    async def _launch(self, binary):
         self.process = await asyncio.create_subprocess_exec(
             binary,
             "serve",
@@ -109,7 +150,7 @@ class NemoRuntime:
             "--host",
             "127.0.0.1",
             "--port",
-            str(ASR_PORT),
+            str(self.port),
             "--no-ui",
             "--api-key",
             self.key,
@@ -122,25 +163,25 @@ class NemoRuntime:
             stderr=asyncio.subprocess.PIPE,
         )
         self._log_task = asyncio.create_task(self._read_log())
-        # Keep startup bounded while allowing the Metal engine to compile its kernels.
+
+    async def _wait_ready(self):
         async with httpx.AsyncClient(timeout=1.0, trust_env=False) as client:
-            for _ in range(240):
+            while True:
                 if self.process.returncode is not None:
-                    raise RuntimeError(f"NeMo を起動できません: {self.last_error[-600:]}")
+                    await self._log_task
+                    return False
                 try:
-                    response = await client.get(f"http://127.0.0.1:{ASR_PORT}/ready")
+                    response = await client.get(f"http://127.0.0.1:{self.port}/ready")
                     if response.is_success and response.json().get("ready"):
                         models = await client.get(
-                            f"http://127.0.0.1:{ASR_PORT}/v1/models",
+                            f"http://127.0.0.1:{self.port}/v1/models",
                             headers={"Authorization": f"Bearer {self.key}"},
                         )
-                        if models.is_success:
-                            return
+                        if models.is_success and self.process.returncode is None:
+                            return True
                 except (httpx.HTTPError, ValueError):
                     pass
                 await asyncio.sleep(0.25)
-        await self.close()
-        raise RuntimeError("NeMo の起動が60秒以内に完了しませんでした。")
 
     async def _read_log(self):
         async for line in self.process.stderr:
@@ -151,7 +192,7 @@ class NemoRuntime:
     def connection(self):
         query = urlencode({"api_key": self.key})
         return connect(
-            f"ws://127.0.0.1:{ASR_PORT}/v1/audio/transcriptions/realtime?{query}",
+            f"ws://127.0.0.1:{self.port}/v1/audio/transcriptions/realtime?{query}",
             open_timeout=10,
             close_timeout=3,
             max_size=2**20,
@@ -178,6 +219,7 @@ class NemoRuntime:
         await self.stop_capture()
         await terminate(self.process)
         self.process = None
+        self.port = None
         if self._log_task:
             self._log_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):

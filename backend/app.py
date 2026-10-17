@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import hmac
+import json
 import os
 from contextlib import asynccontextmanager
 
@@ -11,6 +12,7 @@ from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconne
 from backend.config import asr_ready, nemo_binary, translation_ready
 from backend.messages import header_language, localize, localize_event, ui_language
 from backend.pipeline import LiveSession, validate_commit_interval
+from backend.ports import API_PORTS, PortsUnavailableError, bind_first_available
 from backend.runtime import NemoRuntime, capture_permission
 from backend.translation import Translator
 
@@ -216,7 +218,18 @@ def main():
     port = int(os.environ.get("RT_PORT", "8765"))
     if port not in {8765, 8767}:
         raise SystemExit("Unsupported local service port")
-    uvicorn.run(app, host="127.0.0.1", port=port, access_log=False, log_level="warning")
+    try:
+        listener = bind_first_available((8767,) if port == 8767 else API_PORTS)
+    except PortsUnavailableError as error:
+        print(json.dumps({"type": error.code, "ports": error.ports}), flush=True)
+        raise SystemExit(str(error)) from error
+    with listener:
+        selected_port = listener.getsockname()[1]
+        print(json.dumps({"type": "service_port", "port": selected_port}), flush=True)
+        config = uvicorn.Config(
+            app, host="127.0.0.1", port=selected_port, access_log=False, log_level="warning"
+        )
+        uvicorn.Server(config).run(sockets=[listener])
 
 
 if __name__ == "__main__":

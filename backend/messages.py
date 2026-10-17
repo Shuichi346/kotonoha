@@ -89,6 +89,15 @@ def header_language(value: str | None) -> str:
 def localize(message: str, language: str, *, error: bool = False) -> str:
     if message in MESSAGES:
         return MESSAGES[message] if language == "en" else message
+    ports_prefix = "ローカルサービス用ポートがすべて使用中です: "
+    if message.startswith(ports_prefix):
+        if language != "en":
+            return message
+        ports = message[len(ports_prefix) :].split("。", 1)[0]
+        return (
+            f"All local service ports are in use ({ports}). "
+            "Check running apps or projects, free a port, then try again."
+        )
     prefix = "NeMo を起動できません: "
     if message.startswith(prefix):
         return ("Unable to start NeMo: " if language == "en" else prefix) + message[len(prefix) :]

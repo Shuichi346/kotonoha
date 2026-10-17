@@ -168,7 +168,7 @@ The finalization interval offers **5, 10, 15, 20, or 30 seconds**, defaults to *
 | --- | --- |
 | Audio access is required | Use the app's guide. In **System Settings → Privacy & Security → Screen & System Audio Recording**, enable the relevant entry; macOS may show **kotonoha** or **LiveCaption Audio**. Return to the app and check access again. Restart kotonoha if macOS requires it. |
 | A model shows **Setup needed** | Run `npm run prepare:models`; confirm the arm64 `nemo-speech` executable is available. |
-| Startup reports a service conflict | Quit another running kotonoha build before launching. Production services use loopback ports 8765 and 8766. |
+| Startup reports a service conflict | Each service automatically tries five backup ports. If all candidates are occupied, check running apps or projects, free one of the listed ports, then restart kotonoha (or retry Start for NeMo). |
 | Captions are missing | Confirm the audio language, video playback, and subtitle-window visibility. Some protected media cannot be captured. |
 | Captions fall behind | Translation speed depends on audio and hardware. When its bounded queue fills, the app skips older waiting utterances and reports this in the status. |
 
@@ -194,7 +194,7 @@ Mac system audio
 | [native/](native/) | Swift system-audio capture helper; microphone capture is disabled and video samples are not delivered or stored |
 | [scripts/](scripts/) | Build, model-runtime staging, packaging, architecture checks, and desktop smoke checks |
 
-Electron main owns the local service credentials. The Python service listens on authenticated loopback port **8765**, and NeMo uses **8766**. The renderer has no Node access. Quitting terminates the backend process group and its owned services.
+Electron main owns the local service credentials. The Python service first tries authenticated loopback port **8765**, then **8770–8774**. NeMo first tries **8766**, then **8780–8784**. Each service automatically selects a free port from its six candidates; Electron uses the port reported by its own backend for HTTP and WebSocket traffic. If every candidate is occupied, an error lists the ports; other apps and projects are never terminated. The renderer has no Node access. Quitting terminates the backend process group and its owned services.
 
 `npm run dev:web` previews the interface in a browser. Live capture and the independent overlay require Electron.
 
@@ -219,6 +219,6 @@ The builder already verifies architecture. For an optional hidden startup check,
 KOTONOHA_SMOKE_APP="/full/path/to/kotonoha.app/Contents/MacOS/kotonoha" node scripts/smoke-desktop.mjs
 ```
 
-The hidden desktop smoke uses a temporary profile and port **8767**, checks startup and IPC, and intercepts Start before capture. It does not verify real audio delivery or macOS permission-dialog interaction.
+The hidden desktop smoke normally uses a temporary profile and isolated port **8767**, checks startup and IPC, and intercepts Start before capture. The optional `KOTONOHA_SMOKE_FALLBACK=1` mode occupies the first five production API candidates and verifies authenticated HTTP/WebSocket on **8774**; it preserves any existing listeners. It does not verify real audio delivery or macOS permission-dialog interaction.
 
 Protocol details and model-validation evidence are in [backend/README.md](backend/README.md); capture and permission behavior are in [native/README.md](native/README.md). [PLANS.md](PLANS.md) tracks implementation acceptance, and [NOTES.md](NOTES.md) records design rationale.

@@ -18,7 +18,6 @@ ASR_DIR = Path(
     os.environ.get("NEMO_SPEECH_MODEL_DIR", Path.home() / "Library/Caches/NeMoSpeech/models")
 )
 CAPTURE = ROOT / "native" / "bin" / "audio-capture"
-ASR_PORT = 8766
 
 
 def nemo_binary() -> str | None:

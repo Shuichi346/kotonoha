@@ -1,5 +1,13 @@
 # Notes
 
+## Automatic local port fallback — 2026-10-17
+
+Fixed ports conflicted with unrelated projects. `backend/ports.py` defines disjoint primary-plus-five pools: API 8765/8770–8774, NeMo 8766/8780–8784. The API binds/listens once and hands that same socket to installed Uvicorn 0.54.0, avoiding a check-then-bind race. Its private stdout reports `service_port` or `ports_unavailable`; `desktop/backend-startup.mjs` validates the report before Electron uses the selected port for HTTP/WebSocket. Port 8767 remains isolated for default smoke tests. Never discover another project through its status response or terminate it to free a port.
+
+The installed NeMo CLI accepts a port but cannot inherit a listener. Probe each candidate, retry confirmed CLI bind conflicts, and use a single 60-second deadline across retries. Other startup failures remain visible. Keep selected-port readiness/authentication/WebSocket connections aligned, retain warm reuse, and close owned processes on timeout/cancellation. Exhaustion lists all candidates in Japanese/English without referring to an old app. Socket/subprocess and mocked-NeMo regressions are in `backend/tests/test_ports.py`; desktop handshake regressions extend `tests/desktop.test.mjs`.
+
+All 94 backend tests, 22 Node desktop/build tests, 16 UI tests, frontend build, and Ruff checks passed. `KOTONOHA_SMOKE_FALLBACK=1` verifies the packaged Electron app with the first five API candidates occupied and real authenticated HTTP/WebSocket on 8774, while intercepting Start before capture. The actual staged NeMo runtime also started on its last candidate 8784, authenticated a `session.created` WebSocket, and released the port after shutdown without capture. The separate app/runtime paths and exact archive/architecture evidence are in PLANS.md. Existing apps, profiles, model caches, and runtime snapshots were preserved.
+
 ## Permission button and tab targets — 2026-10-17
 
 The retry action in `frontend/PermissionGuide.tsx` inherited the small, muted defer-link style, making the required permission action hard to find after a failed check. Initial and retry requests now share a full-width red `permission-request` style, with retry before Settings/Defer; confirmation remains a separate blue action. Permission/capture behavior is unchanged.

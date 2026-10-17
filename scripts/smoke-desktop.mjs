@@ -3,11 +3,23 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createServer } from 'node:net';
 const timeout = setTimeout(() => { console.error('Desktop smoke exceeded 45 seconds.'); process.exit(1); }, 45000);
 const profile = mkdtempSync(path.join(tmpdir(), 'kotonoha-smoke-'));
-const env = { ...process.env, KOTONOHA_TEST_PROFILE: profile, KOTONOHA_TEST_PORT: '8767', KOTONOHA_TEST_HIDDEN: '1' }; delete env.ELECTRON_RUN_AS_NODE;
+const fallback = process.env.KOTONOHA_SMOKE_FALLBACK === '1';
+const env = { ...process.env, KOTONOHA_TEST_PROFILE: profile, KOTONOHA_TEST_PORT: fallback ? '8765' : '8767', KOTONOHA_TEST_HIDDEN: '1' }; delete env.ELECTRON_RUN_AS_NODE;
+const occupied = [];
 let desktop;
 try {
+  if (fallback) {
+    for (const port of [8765, 8770, 8771, 8772, 8773]) {
+      const server = createServer();
+      await new Promise((resolve, reject) => {
+        server.once('error', (error) => error.code === 'EADDRINUSE' ? resolve() : reject(error));
+        server.listen(port, '127.0.0.1', () => { occupied.push(server); resolve(); });
+      });
+    }
+  }
   desktop = await electron.launch({ executablePath: path.resolve(process.env.KOTONOHA_SMOKE_APP || 'release/kotonoha-darwin-arm64/kotonoha.app/Contents/MacOS/kotonoha'), env, timeout: 15000 });
   const errors = [];
   desktop.on('window', (page) => page.on('pageerror', (error) => errors.push(error.message)));
@@ -19,6 +31,21 @@ try {
   }
   assert(controller, 'Controller renderer must be available');
   await controller.waitForFunction(() => !!window.kotonoha);
+  if (fallback) await desktop.evaluate(() => {
+    globalThis.smokeHTTPPorts = [];
+    globalThis.smokeWSPorts = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = (url, ...args) => {
+      globalThis.smokeHTTPPorts.push(new URL(url).port);
+      return original(url, ...args);
+    };
+    globalThis.WebSocket = new Proxy(globalThis.WebSocket, {
+      construct(target, args) {
+        globalThis.smokeWSPorts.push(new URL(args[0]).port);
+        return new target(...args);
+      }
+    });
+  });
   const presentation = await desktop.evaluate(({ BrowserWindow, app, screen }) => {
     const windows = BrowserWindow.getAllWindows();
     const controls = windows.find((win) => !win.isAlwaysOnTop());
@@ -103,6 +130,12 @@ try {
     type: 'start', source: result.after.settings.source, target: result.after.settings.target,
     ui_language: 'en', commit_interval_seconds: 10,
   });
+  if (fallback) {
+    const ports = await desktop.evaluate(() => ({ http: globalThis.smokeHTTPPorts, ws: globalThis.smokeWSPorts }));
+    assert(ports.http.length > 0 && ports.http.every((port) => port === '8774'));
+    assert.deepEqual(ports.ws, ['8774']);
+    assert(occupied.every((server) => server.listening));
+  }
   const safety = await desktop.evaluate(({ BrowserWindow, app }) => {
     const windows = BrowserWindow.getAllWindows();
     const controls = windows.find((win) => !win.isAlwaysOnTop());
@@ -112,8 +145,9 @@ try {
     return { overlayVisible: windows.find((win) => win.isAlwaysOnTop()).isVisible() };
   });
   assert.equal(safety.overlayVisible, false);
-  console.log(JSON.stringify({ passed: true, windows: windows.length, presentation, asr: result.status.asr.ready, translation: result.status.translation.ready, capture: result.status.capture, ipc: 'authenticated backend and independent overlay', rendererErrors: errors.length }));
+  console.log(JSON.stringify({ passed: true, fallbackPort: fallback ? 8774 : undefined, windows: windows.length, presentation, asr: result.status.asr.ready, translation: result.status.translation.ready, capture: result.status.capture, ipc: 'authenticated backend and independent overlay', rendererErrors: errors.length }));
 } finally {
   await desktop?.close();
+  await Promise.all(occupied.map((server) => new Promise((resolve) => server.close(resolve))));
   clearTimeout(timeout);
 }

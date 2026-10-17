@@ -9,6 +9,7 @@ import { desktopLabels } from './locale.mjs';
 import { windowAvailable, showController, releaseOverlay, setOverlayInput, showStartupOverlay } from './window-actions.mjs';
 import { createCaptureActions } from './capture-actions.mjs';
 import { startupWindowLayout } from './window-layout.mjs';
+import { backendPort } from './backend-startup.mjs';
 
 app.setName('kotonoha');
 if (process.env.KOTONOHA_TEST_PROFILE) app.setPath('userData', process.env.KOTONOHA_TEST_PROFILE);
@@ -16,9 +17,9 @@ if (process.env.KOTONOHA_TEST_PROFILE) app.setPath('userData', process.env.KOTON
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = app.isPackaged ? JSON.parse(readFileSync(path.join(process.resourcesPath, 'runtime.json'), 'utf8')).root : path.resolve(here, '..');
 const token = randomBytes(32).toString('hex');
-const port = Number(process.env.KOTONOHA_TEST_PORT || 8765);
+let port = Number(process.env.KOTONOHA_TEST_PORT || 8765);
 if (![8765, 8767].includes(port)) throw new Error('Unsupported local service port');
-const base = `http://127.0.0.1:${port}`;
+let base = `http://127.0.0.1:${port}`;
 let controller, overlay, tray, backend, socket, quitting = false, backendError = '', blocker;
 let latest = null;
 let state = 'stopped';
@@ -107,7 +108,7 @@ async function waitForBackend() {
     try {
       const result = await fetch(`${base}/api/status`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(1000) });
       if (result.ok) return;
-      if (result.status === 401 || result.status === 403) throw Object.assign(new Error(text().portBusy), { code: 'PORT_IN_USE' });
+      if (result.status === 401 || result.status === 403) throw Object.assign(new Error(text().portBusy.replace('{ports}', String(port))), { code: 'PORT_IN_USE' });
     } catch (error) { if (error.code === 'PORT_IN_USE') throw error; }
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
@@ -226,11 +227,15 @@ else {
     });
     const python = path.join(root, '.venv/bin/python');
     if (existsSync(python)) {
-      backend = spawn(python, ['-m', 'backend.app'], { cwd: root, env: { ...process.env, PYTHONHOME: undefined, PYTHONPATH: undefined, PYTHONNOUSERSITE: '1', RT_TOKEN: token, PYTHONUNBUFFERED: '1', RT_ROOT: root, RT_PORT: String(port) }, detached: true, stdio: ['ignore', 'ignore', 'pipe'] });
+      backend = spawn(python, ['-m', 'backend.app'], { cwd: root, env: { ...process.env, PYTHONHOME: undefined, PYTHONPATH: undefined, PYTHONNOUSERSITE: '1', RT_TOKEN: token, PYTHONUNBUFFERED: '1', RT_ROOT: root, RT_PORT: String(port) }, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
       backend.stderr.on('data', (data) => { backendError = (backendError + data.toString()).slice(-3000); });
       backend.on('error', (error) => { backendError = error.message; statusEvent({ type: 'error', message: text().missingPython }); });
       backend.on('exit', () => { if (!quitting) { statusEvent({ type: 'error', message: text().pythonStopped }); statusEvent({ type: 'status', state: 'stopped' }); } });
-      ready.promise = waitForBackend();
+      ready.promise = backendPort(backend, port, text, () => backendError).then(async (selectedPort) => {
+        port = selectedPort;
+        base = `http://127.0.0.1:${port}`;
+        await waitForBackend();
+      });
     } else ready.promise = Promise.reject(new Error(text().missingPython));
     ready.promise.catch((error) => { backendError = error.message; statusEvent({ type: 'error', message: error.message }); });
     await controller.loadFile(path.join(here, '../dist/index.html'));

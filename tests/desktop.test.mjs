@@ -222,3 +222,42 @@ test('explicit controller restoration activates the app, while background errors
   showController(window, { application, quitting: true });
   assert.deepEqual(calls, []);
 });
+
+test('owned backend reports its fallback port across pipe chunks', async () => {
+  const { EventEmitter } = await import('node:events');
+  const { PassThrough } = await import('node:stream');
+  const { backendPort } = await import('../desktop/backend-startup.mjs');
+  const child = new EventEmitter(); child.stdout = new PassThrough();
+  const selected = backendPort(child, 8765, () => desktopLabels('ja'), () => '');
+  child.stdout.write('diagnostic\n{"type":"service_');
+  child.stdout.write('port","port":8774}\n');
+  assert.equal(await selected, 8774);
+  assert.equal(child.listenerCount('exit'), 0);
+  assert.equal(child.stdout.listenerCount('data'), 0);
+});
+
+test('backend handshake rejects exhaustion, unexpected ports, exit, spawn error and timeout', async () => {
+  const { EventEmitter } = await import('node:events');
+  const { PassThrough } = await import('node:stream');
+  const { backendPort } = await import('../desktop/backend-startup.mjs');
+  for (const language of ['ja', 'en']) {
+    for (const scenario of ['exhausted', 'invalid', 'smoke', 'exit', 'spawn', 'timeout']) {
+      const child = new EventEmitter(); child.stdout = new PassThrough();
+      const labels = desktopLabels(language);
+      const port = scenario === 'smoke' ? 8767 : 8765;
+      const selected = backendPort(child, port, () => labels, () => '', 20);
+      const expected = scenario === 'exhausted' ? /8765, 8770, 8771, 8772, 8773, 8774/
+        : scenario === 'exit' ? labels.backendExited : scenario === 'spawn' ? labels.missingPython
+        : scenario === 'timeout' ? labels.pythonStartup : labels.invalidResponse;
+      const rejected = assert.rejects(selected, typeof expected === 'string' ? { message: expected } : expected);
+      if (scenario === 'exhausted') child.stdout.write('{"type":"ports_unavailable"}\n');
+      if (scenario === 'invalid') child.stdout.write('{"type":"service_port","port":9999}\n');
+      if (scenario === 'smoke') child.stdout.write('{"type":"service_port","port":8765}\n');
+      if (scenario === 'exit') child.emit('exit', 1);
+      if (scenario === 'spawn') child.emit('error', new Error('spawn failure'));
+      await rejected;
+      assert.equal(child.listenerCount('exit'), 0);
+      assert.equal(child.stdout.listenerCount('data'), 0);
+    }
+  }
+});
