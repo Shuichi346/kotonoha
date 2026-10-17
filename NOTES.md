@@ -1,5 +1,9 @@
 # Notes
 
+## Local checkout name — 2026-10-17
+
+The checkout is now `/Users/shuichi/Documents/GitHub/kotonoha`. This is a local-only repository with no configured remote; do not infer a GitHub URL from the account name. Python project metadata and both README clone directory examples use kotonoha. Moving the checkout required updating the existing virtual environment’s generated interpreter and activation paths; the global base interpreter and shared caches remain in place. Existing Git history, ignored models, and app artifacts were preserved. Build, desktop/backend tests, lockfile consistency, and Ruff checks passed after relocation; PLANS.md holds acceptance evidence. Reopen the new directory in editors/Codex that retain the former path.
+
 ## Shared model caches and local source builds — 2026-10-16
 
 Each user clones and builds on their own Mac. Keep Hy-MT2's exact evaluated revision in the standard HF Hub cache and let the already installed NeMo CLI manage its `nemotron-3.5` cache. `backend/config.py` derives the pinned snapshot from HF's cache constants and reads the installed NeMo schema-1 index relative to the resolved binary (or the explicit index override). Readiness must remain offline and reject missing tokenizer/weight shards, unrelated GGUFs, old ASR revisions, and truncated ASR artifacts. Never restore the workspace `HF_HOME`/NeMo directory overrides or copy model weights into new runtime snapshots. Cache overrides belong to the launch environment; Finder does not inherit shell settings. Old model folders and runtime snapshots are preserved for existing builds.

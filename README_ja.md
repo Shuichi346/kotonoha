@@ -100,8 +100,8 @@ arm64版であることとMetal対応を確認します。NeMoは0.2.0で動作�
 GitHubの**Code**メニューからこのリポジトリのclone URLをコピーし、次の`REPOSITORY_URL`を置き換えて実行します。
 
 ```sh
-git clone REPOSITORY_URL Real-time-translation
-cd Real-time-translation
+git clone REPOSITORY_URL kotonoha
+cd kotonoha
 npm ci
 npm run setup:electron
 uv sync --locked

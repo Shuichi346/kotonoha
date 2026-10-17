@@ -81,8 +81,17 @@ This is the single authoritative implementation and acceptance checklist. The or
 - [x] SCP1 — Prepare the shared models, package separately, and verify shared model inference, arm64 support, and hidden startup without capture.
 - [x] SCD1 — Record final evidence and update durable project guidance.
 
-Current: Complete — shared per-user caches and installed NeMo are active in the source and `release/shared-cache/kotonoha-darwin-arm64/kotonoha.app`. Each user clones and builds locally. Existing models, snapshots, and app artifacts were preserved.
+- [x] RN1 — Align README clone folders and Python project metadata with kotonoha.
+- [x] RNV1 — Rename the local checkout to kotonoha, repair generated virtual-environment paths, and verify the relocated project.
+
+Current: Complete — the local checkout is `/Users/shuichi/Documents/GitHub/kotonoha`. GitHub publication has not occurred and no remote is configured.
 Next: None.
+
+## Local Repository Rename — 2026-10-17
+
+The user clarified that this repository has not been uploaded to GitHub. Rename the existing checkout from `Real-time-translation` to `kotonoha`, preserving Git history, ignored models, generated builds, and installed dependencies. Align the Python project name/lockfile and both README clone directory examples. Repair absolute interpreter/activation paths in the existing virtual environment when relocating it. This change requires no GitHub repository creation or publication.
+
+RNV1: the directory was renamed without changing HEAD or adding a remote. Generated virtual-environment scripts and activation metadata were repaired for the new path. The offline lockfile check, direct pytest entry point, frontend types/build, existing desktop tests, backend tests, and Ruff lint/format checks passed from the renamed checkout. No runtime source, dependency versions, models, or packaged applications changed; no capture was started. Historical paths in earlier evidence remain unchanged. The existing Codex project/editor may need to reopen the new folder.
 
 ## Shared-cache Migration — 2026-10-16
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-17
+
+### Changed
+
+- Renamed the local repository folder to kotonoha, repaired virtual-environment paths, and aligned the Python project name and README clone directory examples.
+
 ## 2026-10-16
 
 ### Added
