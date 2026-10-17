@@ -85,10 +85,10 @@ The build script below checks arm64 and Metal support. NeMo 0.2.0 is the tested 
 
 ### Local app packaging
 
-After preparing the tools above, copy this repository's clone URL from GitHub's **Code** menu and replace `REPOSITORY_URL` below:
+After preparing the tools above, clone [Shuichi346/kotonoha](https://github.com/Shuichi346/kotonoha) and build it:
 
 ```sh
-git clone REPOSITORY_URL kotonoha
+git clone https://github.com/Shuichi346/kotonoha.git kotonoha
 cd kotonoha
 ./scripts/build-app.sh
 ```

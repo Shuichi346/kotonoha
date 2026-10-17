@@ -85,10 +85,10 @@ curl -fsSL https://github.com/NVIDIA/NeMo-Speech.cpp/raw/main/scripts/install.sh
 
 ### ローカルアプリのパッケージ
 
-上記のツールを準備したら、GitHubの**Code**メニューからこのリポジトリのclone URLをコピーし、次の`REPOSITORY_URL`を置き換えて実行します。
+上記のツールを準備したら、[Shuichi346/kotonoha](https://github.com/Shuichi346/kotonoha)をcloneしてビルドします。
 
 ```sh
-git clone REPOSITORY_URL kotonoha
+git clone https://github.com/Shuichi346/kotonoha.git kotonoha
 cd kotonoha
 ./scripts/build-app.sh
 ```

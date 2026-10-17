@@ -150,6 +150,40 @@ test('subtitle toolbar follows interface language while retaining subtitle conte
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
 });
 
+async function verifyTabTargets(page, names) {
+  const nav = page.getByRole('navigation');
+  for (const name of names) {
+    const button = nav.getByRole('button', { name, exact: true });
+    const geometry = await button.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      const label = document.createRange();
+      label.selectNodeContents(element);
+      const text = label.getBoundingClientRect();
+      return {
+        height: bounds.height,
+        centerOffset: Math.abs((bounds.left + bounds.right - text.left - text.right) / 2),
+        edgesHit: [bounds.left + 2, bounds.right - 2].every((x) => document.elementFromPoint(x, bounds.top + bounds.height / 2)?.closest('button') === element),
+      };
+    });
+    expect(geometry.height).toBeGreaterThanOrEqual(44);
+    expect(geometry.centerOffset).toBeLessThan(1);
+    expect(geometry.edgesHit).toBe(true);
+    const bounds = await button.boundingBox();
+    for (const x of [2, bounds.width - 2]) {
+      await nav.getByRole('button').first().click();
+      await button.click({ position: { x, y: bounds.height / 2 } });
+      await expect(button).toHaveAttribute('aria-pressed', 'true');
+    }
+  }
+  await nav.getByRole('button').first().focus();
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Enter');
+  await expect(nav.getByRole('button').nth(1)).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Space');
+  await expect(nav.getByRole('button').last()).toHaveAttribute('aria-pressed', 'true');
+}
+
 for (const viewport of [{ width: 480, height: 640 }, { width: 420, height: 500 }]) {
   test(`settings tab saves interval and keeps natural-boundary guidance at ${viewport.width}x${viewport.height}`, async ({ page }) => {
     const errors = [];
@@ -162,7 +196,7 @@ for (const viewport of [{ width: 480, height: 640 }, { width: 420, height: 500 }
     await expect(page).toHaveTitle('kotonoha — ライブ字幕翻訳');
     await expect(page.getByRole('main')).toBeVisible();
     await expect(page.getByLabel('Language', { exact: true })).toHaveCount(0);
-    await page.getByRole('button', { name: '設定', exact: true }).click();
+    await verifyTabTargets(page, ['ライブ翻訳', '履歴', '設定']);
     const interval = page.getByLabel('確定要求の間隔', { exact: true });
     await expect(interval).toHaveValue('15');
     await expect(interval.locator('option')).toHaveText(['5秒', '10秒', '15秒', '20秒', '30秒']);
@@ -170,6 +204,7 @@ for (const viewport of [{ width: 480, height: 640 }, { width: 420, height: 500 }
     await interval.selectOption('10');
     await page.screenshot({ path: `/private/tmp/kotonoha-settings-ja-${viewport.width}.png`, animations: 'disabled' });
     await page.getByLabel('Language', { exact: true }).selectOption('en');
+    await verifyTabTargets(page, ['Live translation', 'History', 'Settings']);
     await expect(page.getByLabel('Finalization request interval', { exact: true })).toHaveValue('10');
     await expect(page).toHaveTitle('kotonoha — Live subtitle translation');
     await expect(page.locator('vite-error-overlay')).toHaveCount(0);
@@ -189,6 +224,41 @@ for (const viewport of [{ width: 480, height: 640 }, { width: 420, height: 500 }
     await expect(page.getByLabel('Finalization request interval', { exact: true })).toBeEnabled();
     await expect(page.getByLabel('Finalization request interval', { exact: true })).toHaveValue('10');
     expect((await page.evaluate(() => window.kotonoha.snapshot())).settings.commitIntervalSeconds).toBe(10);
+    expect(errors).toEqual([]);
+  });
+}
+
+for (const viewport of [{ width: 480, height: 640 }, { width: 420, height: 500 }]) {
+  test(`permission requests stay prominent before and after retry at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('console', (message) => { if (['error', 'warning'].includes(message.type())) errors.push(message.text()); });
+    await page.setViewportSize(viewport);
+    await bridge(page, null, { permission: 'required' });
+    await page.goto('/');
+    await expect(page).toHaveURL('http://127.0.0.1:5173/');
+    await expect(page).toHaveTitle('kotonoha — ライブ字幕翻訳');
+    const guide = page.getByRole('dialog');
+    const request = guide.getByRole('button', { name: '許可画面へ進む', exact: true });
+    for (const stage of ['initial', 'retry']) {
+      await request.scrollIntoViewIfNeeded();
+      await page.mouse.move(0, 0);
+      await expect(request).toHaveCSS('background-color', 'rgb(201, 54, 54)');
+      await expect(request).toHaveCSS('color', 'rgb(255, 255, 255)');
+      const bounds = await request.boundingBox();
+      expect(bounds.height).toBeGreaterThanOrEqual(48);
+      expect(bounds.width).toBeGreaterThan(viewport.width - 110);
+      expect(bounds.x).toBeGreaterThanOrEqual(0);
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width);
+      expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.height);
+      await page.screenshot({ path: `/private/tmp/kotonoha-permission-${stage}-${viewport.width}.png`, animations: 'disabled' });
+      await request.click({ position: { x: bounds.width - 3, y: bounds.height / 2 } });
+      await expect(guide).toContainText('許可を確認できていません');
+      expect(await page.evaluate(() => window.testCalls)).toEqual(stage === 'initial' ? ['permission'] : ['permission', 'permission']);
+    }
+    await expect(guide.getByRole('button', { name: '許可状況を確認', exact: true })).toBeEnabled();
+    await expect(page.locator('vite-error-overlay')).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(errors).toEqual([]);
   });
 }

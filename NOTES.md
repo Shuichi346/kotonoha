@@ -1,5 +1,11 @@
 # Notes
 
+## Permission button and tab targets — 2026-10-17
+
+The retry action in `frontend/PermissionGuide.tsx` inherited the small, muted defer-link style, making the required permission action hard to find after a failed check. Initial and retry requests now share a full-width red `permission-request` style, with retry before Settings/Defer; confirmation remains a separate blue action. Permission/capture behavior is unchanged.
+
+The history tab rendered an empty count span, introducing an invisible 9 px flex gap and shifting its label off center. Render counts only when present. Symmetric padding, a 44 px minimum height, a selected background/underline, and hover feedback align visible tab bounds with clickable bounds. Keep all tab weights stable to avoid width changes on selection. `tests/interface.spec.mjs` verifies text centers, edge hit tests/clicks, keyboard activation, compact geometry, request/retry styling, and existing permission-state behavior. All sixteen UI tests, twenty Node tests, and the frontend build passed; PLANS.md records package/smoke evidence. Real OS permission interaction was not exercised.
+
 ## One-command app builder — 2026-10-17
 
 `scripts/build-app.sh` bootstraps from Bash so missing or unsupported Node/npm can be diagnosed before invoking project JavaScript. Tool probes retain stderr separately from parsed stdout: Xcode can emit a successful SDK version alongside an unrelated stderr warning. Diagnostics have 30-second limits and complete before dependency installation. NeMo discovery follows the backend's explicit path/PATH/user-local fallback and checks its compiled Metal feature and arm64 executable. Python 3.13 arm64 is checked after uv sync; force the project `.venv` because runtime staging reads that directory.

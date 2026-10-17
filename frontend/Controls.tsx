@@ -23,7 +23,11 @@ export function Controls({ live }: { live: Live }) {
   return <main className="controller">
     <header className="titlebar"><span className="wordmark">kotonoha</span><span className="titlebar-caption">{text.tagline}</span></header>
     <div className="control-body">
-      <nav className="tabs" aria-label={text.view}><button aria-pressed={tab === 'live'} className={tab === 'live' ? 'selected' : ''} onClick={() => setTab('live')}>{text.live}</button><button aria-pressed={tab === 'history'} className={tab === 'history' ? 'selected' : ''} onClick={() => setTab('history')}>{text.history}<span>{history.length || ''}</span></button><button aria-pressed={tab === 'settings'} className={tab === 'settings' ? 'selected' : ''} onClick={() => setTab('settings')}>{text.settings}</button></nav>
+      <nav className="tabs" aria-label={text.view}>
+        <button aria-pressed={tab === 'live'} className={tab === 'live' ? 'selected' : ''} onClick={() => setTab('live')}>{text.live}</button>
+        <button aria-pressed={tab === 'history'} className={tab === 'history' ? 'selected' : ''} onClick={() => setTab('history')}>{text.history}{history.length > 0 ? <span>{history.length}</span> : null}</button>
+        <button aria-pressed={tab === 'settings'} className={tab === 'settings' ? 'selected' : ''} onClick={() => setTab('settings')}>{text.settings}</button>
+      </nav>
       {tab === 'settings' ? <section className="app-settings" aria-label={text.settings}>
         <h1>{text.settings}</h1>
         <p className="intro">{text.settingsIntro}</p>

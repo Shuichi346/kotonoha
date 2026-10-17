@@ -25,9 +25,9 @@ export function PermissionGuide({ live }: { live: Live }) {
     </div>
     {!granted && live.permissionAttempted ? <p className="permission-restart">{text.permissionRestart}</p> : null}
     {granted ? <><p className="permission-next">{text.permissionReadyHint}</p><button className="primary" onClick={close} disabled={busy}>{text.permissionContinue}</button></> : <>
-      <button className="primary" disabled={busy} onClick={() => { if (live.permissionAttempted) void live.check(); else void live.requestCapturePermission(); }}>{live.requestingPermission ? text.requestingPermission : live.checking ? text.checkingAccess : live.permissionAttempted ? text.checkPermission : text.requestPermission}</button>
+      <button className={`primary ${live.permissionAttempted ? '' : 'permission-request'}`} disabled={busy} onClick={() => { if (live.permissionAttempted) void live.check(); else void live.requestCapturePermission(); }}>{live.requestingPermission ? text.requestingPermission : live.checking ? text.checkingAccess : live.permissionAttempted ? text.checkPermission : text.requestPermission}</button>
+      {live.permissionAttempted ? <button className="primary permission-request" disabled={busy} onClick={() => { void live.requestCapturePermission(); }}>{text.requestPermission}</button> : null}
       <div className="permission-actions"><button className="secondary" disabled={busy} onClick={() => { void live.openCaptureSettings(); }}>{text.openSettings}</button><button className="permission-later" disabled={busy} onClick={close}>{text.permissionLater}</button></div>
-      {live.permissionAttempted ? <button className="permission-later" disabled={busy} onClick={() => { void live.requestCapturePermission(); }}>{text.requestPermission}</button> : null}
     </>}
   </dialog>;
 }

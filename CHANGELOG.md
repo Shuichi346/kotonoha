@@ -2,6 +2,11 @@
 
 ## 2026-10-17
 
+### Fixed
+
+- Enlarged initial and retry permission requests into full-width red buttons and moved retry above auxiliary actions.
+- Centered tab labels within visible 44 px high click targets and removed invisible spacing from empty history counts; retained keyboard navigation.
+
 ### Added
 
 - Added `scripts/build-app.sh` to check tools and compatibility, install locked dependencies, prepare shared models, build a separate local app, and verify arm64 support in one invocation; added `--check` for diagnostics only.

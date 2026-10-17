@@ -88,8 +88,25 @@ This is the single authoritative implementation and acceptance checklist. The or
 - [x] BV1 — Verify prerequisite failures and build sequencing without capture, then run the builder and inspect the resulting arm64 app.
 - [x] BD1 — Move local packaging before installation/launch in both READMEs and record final evidence.
 
-Current: Complete — the one-command builder produced and verified a separate arm64 app; both READMEs place packaging before installation/launch.
+- [x] U1 — Make initial/retry permission requests prominent and align tab text, visible selection, and click bounds.
+- [x] UV1 — Verify permission states and tab boundaries in both locales/compact controller sizes; pass affected frontend and desktop checks.
+- [x] UP1 — Package a separate arm64 UI correction and verify its archive and hidden startup without capture.
+- [x] UD1 — Record the final behavior and acceptance evidence.
+
+- [x] RU1 — Replace README repository placeholders with the user-supplied Shuichi346/kotonoha URL in both languages and review the documentation diff.
+
+Current: Complete — both READMEs link to https://github.com/Shuichi346/kotonoha and provide its concrete HTTPS clone command. Earlier UI/package acceptance remains valid.
 Next: None.
+
+## Permission Button and Tab Targets — 2026-10-17
+
+The working tree was clean. Prior completed items retain historical evidence. The supplied screenshots identify a small permission retry link and tab labels that do not match perceived click bounds. Use a full-width red request button for both initial and retry actions, put retry before auxiliary actions, and preserve separate blue permission verification. Give every tab a 44 px high target with symmetric padding and selection/hover feedback; omit the empty history-count span that creates invisible flex spacing.
+
+Validation uses the existing finite scripted Playwright runner because the Browser plugin is unavailable. Follow the existing restriction on AI-driven browser interaction/screenshot inspection; scripted geometry, styles, hit tests, console checks, and screenshots provide evidence. Test Japanese/English at 480×640 and 420×500 with mocked permissions, plus the frontend build (30 seconds per stage) and Node desktop/build tests (30 seconds). Package a new `release/permission-tabs-fix` artifact (180 seconds), inspect source/archive and arm64 (30 seconds), and run the hidden temporary-profile smoke (45 seconds). Each unit allows initial execution plus two focused repairs. Reuse unaffected native/backend/model/icon evidence; do not request real OS permission or start capture. Preserve previous builds and running apps.
+
+UV1: frontend build and twenty Node tests passed on execution 1. UI execution 1 was blocked at Chromium launch by the sandbox's Mach-port restriction; approved execution 2 passed all sixteen tests. New assertions verify centered tab labels, both click edges, Enter/Space activation in Japanese/English, and full-width 48 px red request buttons before/after retry at both viewports. Existing cases cover deferred requests, failed/settings-first retries, and separate confirmation/Start. Page identity, meaningful content, no Vite overlay, no horizontal overflow, and zero browser warnings/errors passed. Scripted screenshots are `/private/tmp/kotonoha-permission-{initial,retry}-{480,420}.png` and `/private/tmp/kotonoha-settings{,-ja}-{480,420}.png`; no AI screenshot inspection was performed.
+
+UP1: package, archive inspection, architecture inspection, and hidden startup each passed on execution 1. The artifact is `release/permission-tabs-fix/kotonoha-darwin-arm64/kotonoha.app`, selecting runtime `7ebfbe699d20183e`. All three generated frontend files and the app icon match their packaged bytes. Architecture checks verified 33 Mach-O components plus Python/NeMo. The temporary-profile hidden smoke confirmed two windows, both models ready, authenticated IPC, capture stopped, and zero renderer errors. No OS permission prompt, real recording, existing-app replacement, or running-app restart occurred. UD1 records the fix in CHANGELOG/NOTES and the permission-button contract in AGENTS; documentation/whitespace review passed. Actual macOS permission-dialog interaction remains untested.
 
 ## One-command Local App Build — 2026-10-17
 
