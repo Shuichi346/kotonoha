@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defaultSettings, validatedSettings, loadSettings } from './preferences.mjs';
+import { defaultSettings, validatedSettings, loadSettings, createSettingsWriter } from './preferences.mjs';
 import { desktopLabels } from './locale.mjs';
 import { windowAvailable, showController, releaseOverlay, setOverlayInput, showStartupOverlay } from './window-actions.mjs';
 import { createCaptureActions } from './capture-actions.mjs';
@@ -28,6 +28,7 @@ let locked = true;
 let history = [];
 let settings = { ...defaultSettings };
 let preferencesPath;
+let preferencesWriter;
 const text = () => desktopLabels(settings.uiLanguage);
 
 function broadcast(event) {
@@ -186,6 +187,7 @@ else {
     app.dock?.setIcon(path.join(here, '../assets/kotonoha.png'));
     app.setAboutPanelOptions({ applicationName: 'kotonoha', iconPath: path.join(here, '../assets/kotonoha.png') });
     preferencesPath = path.join(app.getPath('userData'), 'settings.json');
+    preferencesWriter = createSettingsWriter(preferencesPath);
     const legacy = process.env.KOTONOHA_TEST_PROFILE ? [] : ['kotoba', 'kotoba-live-subtitles'].map((name) => path.join(app.getPath('appData'), name, 'settings.json'));
     settings = loadSettings(preferencesPath, legacy);
     const area = screen.getPrimaryDisplay().workArea;
@@ -213,12 +215,16 @@ else {
       if (!response.ok) throw new Error(`${text().readiness} (${response.status})`);
       return response.json();
     }));
-    handle('app:settings', (value) => {
+    handle('app:settings', async (value) => {
+      const previousLanguage = settings.uiLanguage;
       try { settings = validatedSettings(value); } catch (error) { throw new Error(text()[error.code] || error.message); }
-      writeFileSync(preferencesPath, JSON.stringify(settings));
+      const saved = preferencesWriter.save(settings);
       broadcast({ type: 'settings', settings });
-      refreshNativeUI();
-      if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'ui_language', ui_language: settings.uiLanguage }));
+      if (settings.uiLanguage !== previousLanguage) {
+        refreshNativeUI();
+        if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'ui_language', ui_language: settings.uiLanguage }));
+      }
+      await saved;
       return settings;
     });
     handle('app:capture-permission', captureActions.requestPermission);
@@ -278,6 +284,8 @@ app.on('before-quit', (event) => {
   if (blocker !== undefined) powerSaveBlocker.stop(blocker);
   const child = backend;
   void (async () => {
+    try { await preferencesWriter?.flush(); }
+    catch (error) { console.error('Could not save subtitle settings:', error.message); }
     if (child?.pid) {
       if (child.exitCode === null) {
         await new Promise((resolve) => {

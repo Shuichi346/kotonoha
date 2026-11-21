@@ -13,7 +13,7 @@ export function stageRuntime(sourceRoot, runtimeBase = path.join(homedir(), 'Lib
   if (base === source || base.startsWith(source + path.sep)) throw new Error('Runtime must be outside the checkout');
   const hash = createHash('sha256');
   const entries = ['backend', '.venv', 'native/bin'];
-  hash.update(`runtime-v3-shared-cache:${entries.join(',')}\n`);
+  hash.update(`runtime-v4-relative-links:${entries.join(',')}\n`);
   function fingerprint(relative) {
     const full = path.join(source, relative);
     const info = lstatSync(full);
@@ -41,7 +41,7 @@ export function stageRuntime(sourceRoot, runtimeBase = path.join(homedir(), 'Lib
   mkdirSync(pending);
   for (const entry of entries) {
     cpSync(path.join(source, entry), path.join(pending, entry), {
-      recursive: true, dereference: false, mode: constants.COPYFILE_FICLONE,
+      recursive: true, dereference: false, verbatimSymlinks: true, mode: constants.COPYFILE_FICLONE,
       filter: (file) => !['__pycache__', '.cache', '.huggingface'].includes(path.basename(file)),
     });
   }

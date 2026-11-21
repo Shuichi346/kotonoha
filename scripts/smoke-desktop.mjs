@@ -70,6 +70,19 @@ try {
     return { focusable: overlay.isFocusable(), visible: overlay.isVisible() };
   });
   assert.deepEqual(inputBefore, { focusable: false, visible: false });
+  await desktop.evaluate(({ Menu }) => {
+    globalThis.smokeMenuRefreshes = 0;
+    const original = Menu.setApplicationMenu;
+    Menu.setApplicationMenu = function (...args) {
+      globalThis.smokeMenuRefreshes++;
+      return original.apply(this, args);
+    };
+  });
+  await controller.evaluate(async () => {
+    const { settings } = await window.kotonoha.snapshot();
+    await Promise.all([32, 34, 30].map((fontSize) => window.kotonoha.settings({ ...settings, fontSize })));
+  });
+  assert.equal(await desktop.evaluate(() => globalThis.smokeMenuRefreshes), 0);
   const result = await controller.evaluate(async () => {
     const before = await window.kotonoha.snapshot();
     const status = await window.kotonoha.status();
@@ -93,6 +106,7 @@ try {
   assert.equal(result.after.settings.uiLanguage, 'en');
   assert.equal(result.after.settings.commitIntervalSeconds, 10);
   assert.equal(result.after.settings.target, result.before.settings.target);
+  assert.equal(await desktop.evaluate(() => globalThis.smokeMenuRefreshes), 1);
   assert.equal(JSON.parse(readFileSync(path.join(profile, 'settings.json'), 'utf8')).uiLanguage, 'en');
   assert.equal(JSON.parse(readFileSync(path.join(profile, 'settings.json'), 'utf8')).commitIntervalSeconds, 10);
   await controller.waitForFunction(() => document.documentElement.lang === 'en');

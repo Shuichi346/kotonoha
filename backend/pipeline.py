@@ -10,8 +10,18 @@ import uuid
 from collections.abc import Awaitable, Callable
 
 from backend.runtime import CapturePermissionError, receive_event
+from backend.translation import (
+    LOAD_TIMEOUT_SECONDS,
+    RECOVERY_TIMEOUT_SECONDS,
+    TRANSLATION_TIMEOUT_SECONDS,
+)
 
 Send = Callable[[dict], Awaitable[None]]
+TRANSLATION_QUEUE_SIZE = 3
+SEND_TIMEOUT_SECONDS = 5
+CAPTURE_STOP_TIMEOUT_SECONDS = 6
+CAPTURE_DRAIN_TIMEOUT_SECONDS = 5
+ASR_DRAIN_TIMEOUT_SECONDS = 15
 
 
 def validate_commit_interval(value: object) -> int:
@@ -38,7 +48,7 @@ class LiveSession:
         self.target = target
         self.commit_interval_seconds = validate_commit_interval(commit_interval_seconds)
         self.stopping = asyncio.Event()
-        self.queue = asyncio.Queue(maxsize=3)
+        self.queue = asyncio.Queue(maxsize=TRANSLATION_QUEUE_SIZE)
         self.task = None
         self._workers = []
         self._partial = ""
@@ -55,11 +65,34 @@ class LiveSession:
     async def stop(self):
         self.stopping.set()
         if self.task:
+            # Stop may arrive during startup or with an active job and a full waiting queue.
+            drain_timeout = self.translation_drain_timeout()
+            stop_timeout = (
+                max(
+                    LOAD_TIMEOUT_SECONDS,
+                    80,  # NeMo startup and the two bounded ASR handshake responses.
+                    CAPTURE_STOP_TIMEOUT_SECONDS
+                    + CAPTURE_DRAIN_TIMEOUT_SECONDS
+                    + ASR_DRAIN_TIMEOUT_SECONDS
+                    + drain_timeout,
+                )
+                + CAPTURE_STOP_TIMEOUT_SECONDS
+                + RECOVERY_TIMEOUT_SECONDS
+            )
             try:
-                await asyncio.wait_for(asyncio.shield(self.task), timeout=90)
+                await asyncio.wait_for(asyncio.shield(self.task), timeout=stop_timeout)
             except TimeoutError:
                 self.task.cancel()
                 await asyncio.gather(self.task, return_exceptions=True)
+
+    def translation_drain_timeout(self):
+        """Cover every retained job plus cancellation/reaping of one failed operation."""
+        return (self.queue.maxsize + 1) * (
+            TRANSLATION_TIMEOUT_SECONDS + SEND_TIMEOUT_SECONDS
+        ) + RECOVERY_TIMEOUT_SECONDS
+
+    async def send_event(self, event):
+        await asyncio.wait_for(self.send(event), timeout=SEND_TIMEOUT_SECONDS)
 
     async def submit(self, text: str, start: float, end: float):
         if not text.strip():
@@ -69,7 +102,7 @@ class LiveSession:
             # Preserve the active translation and newest waiting utterances.
             self.queue.get_nowait()
             self.queue.task_done()
-            await self.send(
+            await self.send_event(
                 {
                     "type": "status",
                     "state": "listening",
@@ -84,9 +117,10 @@ class LiveSession:
             try:
                 text, start, end, received = item
                 result = await asyncio.wait_for(
-                    self.translator.translate(text, self.source, self.target), timeout=30
+                    self.translator.translate(text, self.source, self.target),
+                    timeout=TRANSLATION_TIMEOUT_SECONDS,
                 )
-                await self.send(
+                await self.send_event(
                     {
                         "type": "subtitle",
                         "id": uuid.uuid4().hex,
@@ -107,7 +141,7 @@ class LiveSession:
             self._processed = max(self._processed, float(event.get("audio_processed", 0)))
             if kind.endswith(".delta"):
                 self._partial += event.get("delta", "")
-                await self.send({"type": "partial", "text": self._partial})
+                await self.send_event({"type": "partial", "text": self._partial})
             elif kind.endswith(".completed"):
                 words = event.get("words") or []
                 start = self._offset + float(words[0]["start"]) if words else self._previous_end
@@ -116,7 +150,7 @@ class LiveSession:
                 await self.submit(event.get("transcript", ""), start, end)
                 self._previous_end = end
                 self._partial = ""
-                await self.send({"type": "partial", "text": ""})
+                await self.send_event({"type": "partial", "text": ""})
             elif kind == "input_audio_buffer.committed":
                 self._offset += self._processed
                 self._processed = 0.0
@@ -148,7 +182,7 @@ class LiveSession:
                 continue
             samples = struct.unpack(f"<{len(pcm) // 2}h", pcm)
             rms = math.sqrt(sum(x * x for x in samples) / max(1, len(samples))) / 32768
-            await self.send({"type": "level", "value": min(1.0, rms * 5)})
+            await self.send_event({"type": "level", "value": min(1.0, rms * 5)})
             await socket.send(pcm)
             uncommitted += len(pcm)
             # Bound continuous-speech context and NeMo's per-buffer upload limit.
@@ -162,14 +196,14 @@ class LiveSession:
             await self.runtime.check_capture_permission()
             if self.stopping.is_set():
                 return
-            await self.send(
+            await self.send_event(
                 {
                     "type": "status",
                     "state": "starting",
                     "message": "ローカルの翻訳・文字起こしモデルを読み込んでいます。",
                 }
             )
-            await asyncio.wait_for(self.translator.load(), timeout=60)
+            await asyncio.wait_for(self.translator.load(), timeout=LOAD_TIMEOUT_SECONDS)
             if self.stopping.is_set():
                 return
             await self.runtime.ensure()
@@ -197,7 +231,7 @@ class LiveSession:
                 if updated.get("type") != "session.updated":
                     raise RuntimeError("NeMo の音声設定に失敗しました。")
                 process = await self.runtime.capture()
-                await self.send({"type": "status", "state": "listening"})
+                await self.send_event({"type": "status", "state": "listening"})
                 producer = asyncio.create_task(self.stream_audio(process, socket))
                 consumer = asyncio.create_task(self.receive(socket))
                 translator = asyncio.create_task(self.translate_queue())
@@ -208,33 +242,37 @@ class LiveSession:
                     if task is not stop and not (task is producer and self.stopping.is_set()):
                         task.result()
                         raise RuntimeError("字幕処理が予期せず終了しました。")
-                # Stop capture first; the commit flushes the last unfinished ASR utterance.
-                await self.runtime.stop_capture()
-                producer.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await producer
+                # The helper flushes on exit; forward its stdout tail before the final commit.
+                await asyncio.wait_for(
+                    self.runtime.stop_capture(), timeout=CAPTURE_STOP_TIMEOUT_SECONDS
+                )
+                await asyncio.wait_for(
+                    asyncio.shield(producer), timeout=CAPTURE_DRAIN_TIMEOUT_SECONDS
+                )
                 self._commits_sent += 1
                 self._flush_commit_target = self._commits_sent
                 await socket.send(json.dumps({"type": "input_audio_buffer.commit"}))
-                await asyncio.wait_for(asyncio.shield(consumer), timeout=15)
+                await asyncio.wait_for(asyncio.shield(consumer), timeout=ASR_DRAIN_TIMEOUT_SECONDS)
                 # Observe worker failures while draining pending translations.
                 drain = asyncio.create_task(self.queue.join())
                 self._workers.append(drain)
                 done, _ = await asyncio.wait(
-                    [drain, translator], timeout=60, return_when=asyncio.FIRST_COMPLETED
+                    [drain, translator],
+                    timeout=self.translation_drain_timeout(),
+                    return_when=asyncio.FIRST_COMPLETED,
                 )
                 if translator in done:
                     translator.result()
                 if drain not in done:
-                    raise RuntimeError("残りの翻訳を60秒以内に完了できませんでした。")
+                    raise RuntimeError("残りの翻訳を制限時間以内に完了できませんでした。")
         except asyncio.CancelledError:
             raise
         except CapturePermissionError as error:
             with contextlib.suppress(Exception):
-                await self.send({"type": "error", "code": error.code, "message": str(error)})
+                await self.send_event({"type": "error", "code": error.code, "message": str(error)})
         except Exception as error:
             with contextlib.suppress(Exception):
-                await self.send(
+                await self.send_event(
                     {
                         "type": "error",
                         "message": str(error) or "モデルの処理が制限時間を超えました。",
@@ -245,7 +283,9 @@ class LiveSession:
                 task.cancel()
             if self._workers:
                 await asyncio.gather(*self._workers, return_exceptions=True)
-            await self.runtime.stop_capture()
+            await asyncio.wait_for(
+                self.runtime.stop_capture(), timeout=CAPTURE_STOP_TIMEOUT_SECONDS
+            )
             with contextlib.suppress(Exception):
-                await self.send({"type": "level", "value": 0})
-                await self.send({"type": "status", "state": "stopped"})
+                await self.send_event({"type": "level", "value": 0})
+                await self.send_event({"type": "status", "state": "stopped"})

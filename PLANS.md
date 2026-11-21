@@ -128,8 +128,32 @@ This is the single authoritative implementation and acceptance checklist. The or
 - [x] SRV1 — Verify missing/incomplete runtime, localized service recovery, restored installed app, and separate correction package without capture.
 - [x] CLV1 — Build and smoke the current source in an isolated directory containing no generated dependencies/helpers/builds, following the README builder workflow.
 
-Current: Installed runtime restored; service errors distinguished from permission setup; clean-source build and final relocated artifact startup passed.
-Next: The user completes macOS approval and explicit translation Start. File changes remain uncommitted/unpublished; commits/pushes remain user operations.
+- [x] FX1 — Drain final PCM before committing, recover cancelled translation workers, and align stop deadlines with the bounded queue.
+- [x] FX2 — Retain history rows by stable IDs and avoid timestamp/list work on partial recognition updates.
+- [x] FX3 — Batch asynchronous preference persistence, limit native-language refreshes, and preserve staged Python aliases independently of the checkout.
+- [x] FX4 — Recheck direct npm and installed Python dependencies against their registries; retain the already-current stable lockfiles.
+- [x] FXV1 — Pass regression tests, frontend build/UI, backend/Ruff, and selected staged-runtime checks without capture or permission prompts.
+- [x] FXP1 — Package a separate arm64 correction and verify its actual runtime, architecture, and hidden startup.
+- [x] FXD1 — Record final changes, contracts, evidence, and verification limits.
+
+Current: All six review findings fixed; source checks and the separately packaged arm64 app passed acceptance.
+Next: The user may quit the previous app and open the separate correction. Real audio/OS approval remain user operations; commits/pushes/merges remain manual.
+
+## Review Finding Corrections — 2026-11-21
+
+The preceding review reproduced final-PCM loss on a yielding send, uncancelled executor work after a translation timeout, insufficient queue drain time, checkout-dependent staged Python aliases, and unnecessary history recreation/reformatting. Preference sliders also synchronously saved and rebuilt native menus on every change. Implement these six corrections while retaining language/model/permission and display contracts. Prior completed implementation entries remain historical evidence; they do not validate these new changes.
+
+Dependency reconciliation: Node 26.13.1, npm 12.2.3, uv 0.13.9, Python 3.13.11. `npm outdated --json` returned `{}` and `uv pip list --outdated --python .venv/bin/python --format json` returned `[]`. The earlier stable-library updates are already in package.json/package-lock.json and uv.lock; no additional dependency change is indicated.
+
+Implementation evidence: backend service/translator tests passed (113 tests), including yielding PCM sends, complete four-job drain, caller/internal timeouts, repeated cancellation, restart serialization, and late process creation. The focused history test passed with 999 retained rows, zero timestamp formats for partial events and one for the added subtitle. Preference batching/flush/order/error recovery and moved-checkout aliases passed; the architecture checker now inspects the runtime selected by the app manifest, with focused regressions for staged native components.
+
+Source verification: full Node suite passed (41 tests), full backend suite passed (133 tests), Ruff lint/format and frontend type/build passed. All 28 scripted UI tests passed at localhost:5173, including compact 420/480 px flows and the new 1000-row regression. UI output is isolated in /private/tmp/kotonoha-fixes-20261121-OlaTYf; the permitted runner avoids the known Chromium macOS sandbox denial. No AI-driven UI interaction or screenshot inspection was used for this correction.
+
+Packaged acceptance: `release/review-fixes-20261121-OlaTYf/kotonoha-darwin-arm64/kotonoha.app` selects runtime `6827c38a8e47c9b0`. The selected-app architecture check passed for 27 app/runtime executables/libraries plus Python/NeMo/llama.cpp. Archived desktop modules, frontend assets, staged backend modules and the ICNS match current source/assets; both staged Python aliases retain `python` and resolve independently of the checkout. Hidden smoke passed with application 0.2.0 / Electron 45.4.1, two safe windows, both caches ready, capture permission `required`, authenticated backend and zero renderer errors. Appearance changes caused zero application-menu rebuilds; switching UI language caused one, and awaited settings IPC persisted the selected values. Start was intercepted before transport, so no audio or inference began. The packager's optional missing `.icon` warning did not affect the matching `.icns` resource. Existing installed apps and earlier builds/snapshots were preserved.
+
+Completion records: CHANGELOG summarizes the fixes, NOTES preserves cancellation/drain/persistence/staging/history rationale, and AGENTS records the durable contracts. backend/README documents deadlines and cancellation recovery; both root READMEs remain aligned because setup/usage requirements did not change. No additional dependencies, model downloads, native/DSP/icon changes, real capture, OS permission requests, Git commits/pushes/merges or app replacement occurred.
+
+Finite verification: targeted new regressions followed by the affected complete Node, Python, Ruff, frontend type/build and scripted UI checks; each command has a finite existing or explicit timeout. Validate runtime aliases after moving a temporary checkout. Produce a separate package using cached models without downloads, inspect its selected runtime and arm64 components, and run hidden smoke with a temporary profile/port8767. No real system audio, OS permission request, privacy-setting change, existing-app replacement, or Git publication. Reuse unchanged native DSP/icon/model-quality evidence; test cancellation with fake HTTP/processes rather than live inference.
 
 ## AppCleaner Runtime Recovery — 2026-11-21
 

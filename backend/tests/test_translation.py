@@ -1,7 +1,9 @@
 """Verify GGUF prompt, completion, and owned worker contracts without model inference."""
 
+import asyncio
 import os
 import subprocess
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -160,6 +162,107 @@ async def test_async_adapter_reuses_worker_and_counts_pfml3_with_bos_once(adapte
         "stream": False,
         "cache_prompt": True,
     }
+    assert 0 < completion.kwargs["timeout"] <= tokenize.kwargs["timeout"] <= 30
+
+
+@pytest.mark.parametrize("cancellation", ["explicit", "caller_timeout", "operation_timeout"])
+async def test_cancellation_reaps_http_work_and_engine_before_restart(
+    adapter, monkeypatch, cancellation
+):
+    translator = adapter.translator
+    await translator.load()
+    started = threading.Event()
+    interrupted = threading.Event()
+    release = threading.Event()
+    finished = threading.Event()
+
+    def post(path, **kwargs):
+        if path == "/tokenize":
+            return response({"tokens": [1, 2]})
+        started.set()
+        try:
+            if not release.wait(2):
+                raise AssertionError("The test did not release its fake HTTP request")
+            raise httpx.ReadError("Owned engine was interrupted")
+        finally:
+            finished.set()
+
+    def interrupt():
+        adapter.process.poll.return_value = -9
+        interrupted.set()
+
+    adapter.client.post.side_effect = post
+    adapter.process.kill.side_effect = interrupt
+    replacement = Mock()
+    replacement.poll.return_value = None
+    replacement_client = Mock()
+    replacement_client.get.side_effect = lambda *args, **kwargs: response({"status": "ok"})
+    adapter.launch.return_value = replacement
+    adapter.client_factory.return_value = replacement_client
+    if cancellation == "operation_timeout":
+        monkeypatch.setattr(translation, "TRANSLATION_TIMEOUT_SECONDS", 0.02)
+    operation = translator.translate("Hello", "en", "ja")
+    if cancellation == "caller_timeout":
+        operation = asyncio.wait_for(operation, 0.02)
+    task = asyncio.create_task(operation)
+    restart = None
+    try:
+        assert await asyncio.to_thread(started.wait, 1)
+        if cancellation == "explicit":
+            task.cancel()
+        assert await asyncio.to_thread(interrupted.wait, 1)
+        restart = asyncio.create_task(translator.load())
+        await asyncio.sleep(0.01)
+        assert not task.done() and not restart.done()
+        assert not finished.is_set()
+        adapter.launch.assert_called_once()
+        if cancellation == "explicit":
+            # A second stop/quit cancellation must not abandon the shielded cleanup.
+            task.cancel()
+        release.set()
+        expected = asyncio.CancelledError if cancellation == "explicit" else TimeoutError
+        with pytest.raises(expected):
+            await asyncio.wait_for(task, 1)
+        await asyncio.wait_for(restart, 1)
+        assert finished.is_set()
+        assert translator._process is replacement
+        assert adapter.launch.call_count == 2
+        adapter.process.kill.assert_called_once()
+        adapter.client.close.assert_called_once()
+    finally:
+        release.set()
+        await asyncio.gather(task, *([restart] if restart else []), return_exceptions=True)
+
+
+async def test_cancelled_startup_cannot_leave_a_late_spawned_engine(adapter):
+    entered = threading.Event()
+    release = threading.Event()
+    original_launch = adapter.launch.side_effect
+
+    def delayed_launch(*args, **kwargs):
+        entered.set()
+        if not release.wait(2):
+            raise AssertionError("The test did not release its fake process launch")
+        return adapter.process
+
+    adapter.launch.side_effect = delayed_launch
+    task = asyncio.create_task(adapter.translator.load())
+    try:
+        assert await asyncio.to_thread(entered.wait, 1)
+        task.cancel()
+        await asyncio.sleep(0)
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(task, 1)
+        adapter.process.terminate.assert_called_once()
+        adapter.process.wait.assert_called_once_with(timeout=5)
+        adapter.client.close.assert_called_once()
+        assert adapter.translator._process is None
+        assert adapter.translator._directory is None
+    finally:
+        release.set()
+        await asyncio.gather(task, return_exceptions=True)
+        adapter.launch.side_effect = original_launch
 
 
 def test_same_language_returns_original_without_loading(adapter):

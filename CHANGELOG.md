@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- Drained the capture helper's remaining PCM before the final ASR commit, and sized stop deadlines for the active translation plus all three waiting utterances.
+- Interrupted and reaped timed-out/cancelled translation work before permitting restart, with a shared request deadline and cleanup of the owned engine/socket.
+- Preserved staged relative Python aliases and invalidated older staging fingerprints; architecture verification now inspects the runtime selected by the app manifest.
+- Retained history rows by subtitle ID and avoided repeated timestamp formatting during partial recognition updates.
+- Batched preference writes asynchronously with atomic replacement and quit flushing; rebuilt native menus and notified the backend only when the interface language changed.
 - Restored the installed app's missing local runtime snapshot so its authenticated backend and audio-permission helper could start again.
 - Opened permission setup after unknown or failed access checks, kept explicit request/settings actions reachable, invalidated stale capture authorization, and preserved successful permission results before model status became available.
 - Distinguished missing runtime and unavailable backend failures from audio authorization across Electron IPC, including startup errors before the renderer loads; blocked translation and replaced misleading permission prompts with localized service recovery guidance.

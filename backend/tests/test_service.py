@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
+from backend import pipeline
 from backend.app import SessionManager, create_app
 from backend.pipeline import LiveSession
 from backend.translation import translation_prompt
@@ -138,6 +139,104 @@ async def test_stop_commits_final_utterance_and_translates_before_stopped(commit
         "session.update",
         "input_audio_buffer.commit",
     ]
+
+
+async def test_stop_drains_split_pcm_before_final_commit_when_event_sends_yield():
+    runtime = FakeRuntime()
+    listening = asyncio.Event()
+    events = []
+
+    async def send(event):
+        events.append(event)
+        if event.get("state") == "listening":
+            listening.set()
+        if event["type"] == "level" and event["value"] != 0:
+            await asyncio.sleep(0.001)
+
+    session = LiveSession(runtime, FakeTranslator(), send, "en", "ja")
+    session.start()
+    await asyncio.wait_for(listening.wait(), 1)
+    await asyncio.wait_for(session.stop(), 1)
+    audio = b"".join(message for message in runtime.socket.sent if isinstance(message, bytes))
+    assert audio == b"\x01\x00\x02\x00"
+    commit = json.dumps({"type": "input_audio_buffer.commit"})
+    assert runtime.socket.sent.index(audio) < runtime.socket.sent.index(commit)
+    assert not any(event["type"] == "error" for event in events)
+    assert events[-1] == {"type": "status", "state": "stopped"}
+
+
+async def test_stalled_capture_drain_does_not_commit_incomplete_audio(monkeypatch):
+    runtime = FakeRuntime()
+    runtime.stop_capture = AsyncMock()
+    listening = asyncio.Event()
+    events = []
+    monkeypatch.setattr(pipeline, "CAPTURE_DRAIN_TIMEOUT_SECONDS", 0.01)
+
+    async def send(event):
+        events.append(event)
+        if event.get("state") == "listening":
+            listening.set()
+
+    session = LiveSession(runtime, FakeTranslator(), send, "en", "ja")
+    session.start()
+    await asyncio.wait_for(listening.wait(), 1)
+    await asyncio.wait_for(session.stop(), 1)
+    assert any(event["type"] == "error" for event in events)
+    assert all(
+        not isinstance(message, str) or json.loads(message)["type"] != "input_audio_buffer.commit"
+        for message in runtime.socket.sent
+    )
+    assert all(task.done() for task in session._workers)
+    assert events[-1] == {"type": "status", "state": "stopped"}
+
+
+async def test_stop_drains_active_translation_and_all_three_waiting_jobs(monkeypatch):
+    runtime = FakeRuntime()
+    started = asyncio.Event()
+    events = []
+
+    class SlowTranslator(FakeTranslator):
+        async def translate(self, text, source, target):
+            started.set()
+            # Scale a successful 20-second operation down by 1000 for this regression.
+            await asyncio.sleep(0.02)
+            return f"訳:{text}"
+
+    original_send = runtime.socket.send
+
+    async def send_to_asr(message):
+        if isinstance(message, str) and json.loads(message)["type"] == "input_audio_buffer.commit":
+            runtime.socket.sent.append(message)
+            await runtime.socket.incoming.put({"type": "input_audio_buffer.committed"})
+        else:
+            await original_send(message)
+
+    runtime.socket.send = send_to_asr
+    original_wait = asyncio.wait
+
+    async def scaled_wait(*args, **kwargs):
+        if kwargs.get("timeout") is not None:
+            kwargs["timeout"] /= 1000
+        return await original_wait(*args, **kwargs)
+
+    monkeypatch.setattr(pipeline.asyncio, "wait", scaled_wait)
+    session = LiveSession(
+        runtime, SlowTranslator(), AsyncMock(side_effect=events.append), "en", "ja"
+    )
+    await session.submit("active", 0, 1)
+    session.start()
+    await asyncio.wait_for(started.wait(), 1)
+    for index in range(3):
+        await session.submit(f"waiting {index}", index + 1, index + 2)
+    await asyncio.wait_for(session.stop(), 1)
+    assert [event["source"] for event in events if event["type"] == "subtitle"] == [
+        "active",
+        "waiting 0",
+        "waiting 1",
+        "waiting 2",
+    ]
+    assert not any(event["type"] == "error" for event in events)
+    assert events[-1] == {"type": "status", "state": "stopped"}
 
 
 @pytest.mark.parametrize("commit_interval_seconds", [None, 5, 10, 15, 20, 30])

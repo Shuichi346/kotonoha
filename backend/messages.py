@@ -61,6 +61,8 @@ MESSAGES = {
         "Subtitle processing ended unexpectedly.",
     "残りの翻訳を60秒以内に完了できませんでした。":
         "Remaining translations did not finish within 60 seconds.",
+    "残りの翻訳を制限時間以内に完了できませんでした。":
+        "Remaining translations did not finish within the time limit.",
     "モデルの処理が制限時間を超えました。":
         "Model processing timed out.",
     "NeMo の起動が60秒以内に完了しませんでした。":

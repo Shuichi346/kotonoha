@@ -1,10 +1,12 @@
 """Run the pinned GGUF on one persistent, privately authenticated llama.cpp worker."""
 
 import asyncio
+import contextlib
 import re
 import secrets
 import subprocess
 import tempfile
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -42,6 +44,10 @@ LANGUAGE_CODES = {
 LANGUAGE_CODES["zh"] = "zh-hans"
 MAX_OUTPUT_TOKENS = 512
 STOP_TOKENS = ["<|plamo:tag|>", "<|plamo:bos|>"]
+TRANSLATION_TIMEOUT_SECONDS = 30
+LOAD_TIMEOUT_SECONDS = 70
+# A cancelled HTTP read can take its remaining timeout to unwind after the engine dies.
+RECOVERY_TIMEOUT_SECONDS = TRANSLATION_TIMEOUT_SECONDS + 10
 
 
 def translation_prompt(text: str, source: str, target: str) -> str:
@@ -65,11 +71,61 @@ class Translator:
         self._process = None
         self._client = None
         self._directory = None
+        self._operation_lock = asyncio.Lock()
+        self._cancelled = threading.Event()
+        self._deadline = None
 
     async def load(self):
-        await asyncio.get_running_loop().run_in_executor(self._pool, self._load)
+        await self._execute(self._load, timeout=LOAD_TIMEOUT_SECONDS)
+
+    async def _execute(self, operation, *args, timeout):  # noqa: ASYNC109
+        # Shield the worker so cancellation cannot lose the handle to running HTTP work.
+        async with self._operation_lock:
+            self._cancelled.clear()
+            self._deadline = time.monotonic() + timeout
+            loop = asyncio.get_running_loop()
+            future = loop.run_in_executor(self._pool, operation, *args)
+            try:
+                async with asyncio.timeout(timeout):
+                    return await asyncio.shield(future)
+            except (asyncio.CancelledError, TimeoutError):
+                self._cancelled.set()
+                process = self._process
+                if process is not None and process.poll() is None:
+                    with contextlib.suppress(ProcessLookupError):
+                        process.kill()
+                cleanup = asyncio.create_task(self._finish_cancelled(future))
+                # Repeated session/quit cancellation must still reap the worker before restart.
+                while not cleanup.done():
+                    try:
+                        await asyncio.shield(cleanup)
+                    except asyncio.CancelledError:
+                        continue
+                cleanup.result()
+                raise
+            finally:
+                self._deadline = None
+
+    async def _finish_cancelled(self, future):
+        with contextlib.suppress(Exception, asyncio.CancelledError):
+            await future
+        await asyncio.get_running_loop().run_in_executor(self._pool, self._release)
+
+    def _check_cancelled(self):
+        if self._cancelled.is_set():
+            raise RuntimeError("モデルの処理が制限時間を超えました。")
+
+    def _request_timeout(self):
+        self._check_cancelled()
+        if self._deadline is None:
+            return TRANSLATION_TIMEOUT_SECONDS
+        remaining = self._deadline - time.monotonic()
+        if remaining <= 0:
+            raise httpx.ReadTimeout("Translation deadline expired")
+        return remaining
 
     def _load(self):
+        self._check_cancelled()
         if self._process is not None and self._process.poll() is None:
             return
         self._release()
@@ -96,7 +152,7 @@ class Translator:
             transport=httpx.HTTPTransport(uds=socket),
             base_url="http://localhost",
             headers={"Authorization": f"Bearer {key}"},
-            timeout=60,
+            timeout=TRANSLATION_TIMEOUT_SECONDS,
             trust_env=False,
         )
         try:
@@ -128,8 +184,10 @@ class Translator:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
+            self._check_cancelled()
             deadline = time.monotonic() + 60
             while time.monotonic() < deadline:
+                self._check_cancelled()
                 if self._process.poll() is not None:
                     raise RuntimeError("翻訳エンジンを起動できませんでした。")
                 try:
@@ -146,8 +204,8 @@ class Translator:
             raise
 
     async def translate(self, text: str, source: str, target: str) -> str:
-        return await asyncio.get_running_loop().run_in_executor(
-            self._pool, self._translate, text, source, target
+        return await self._execute(
+            self._translate, text, source, target, timeout=TRANSLATION_TIMEOUT_SECONDS
         )
 
     def _translate(self, text: str, source: str, target: str) -> str:
@@ -158,7 +216,9 @@ class Translator:
         try:
             # Count with the runtime tokenizer, parsing PFML3 and inserting BOS exactly once.
             tokens = self._client.post(
-                "/tokenize", json={"content": prompt, "add_special": True, "parse_special": True}
+                "/tokenize",
+                json={"content": prompt, "add_special": True, "parse_special": True},
+                timeout=self._request_timeout(),
             )
             tokens.raise_for_status()
             tokens = tokens.json()["tokens"]
@@ -175,6 +235,7 @@ class Translator:
                     "stream": False,
                     "cache_prompt": True,
                 },
+                timeout=self._request_timeout(),
             )
             response.raise_for_status()
             result = response.json()
@@ -187,6 +248,7 @@ class Translator:
                 raise RuntimeError("翻訳を完了できませんでした。")
             return text
         except httpx.TimeoutException as error:
+            self._release()
             raise RuntimeError("モデルの処理が制限時間を超えました。") from error
         except (httpx.HTTPError, KeyError, TypeError, AttributeError) as error:
             raise RuntimeError("翻訳を完了できませんでした。") from error

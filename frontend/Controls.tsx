@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { Icon, Wave } from './icons';
 import type { Live } from './useLive';
-import type { ModelStatus } from './types';
+import type { ModelStatus, Settings, Subtitle } from './types';
 import { labels, uiLanguage } from './i18n';
 import { PermissionGuide } from './PermissionGuide';
 const languages = [{ code: 'en', name: 'English' }, { code: 'ja', name: '日本語' }, { code: 'de', name: 'Deutsch' }, { code: 'fr', name: 'Français' }, { code: 'es', name: 'Español' }, { code: 'it', name: 'Italiano' }, { code: 'zh', name: '中文' }, { code: 'ko', name: '한국어' }];
@@ -11,6 +11,23 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
 function ModelRow({ title, status, text }: { title: string; status?: ModelStatus; text: ReturnType<typeof labels> }) {
   return <div className="model-row"><span>{title}</span><span className={`model-state ${status?.ready ? 'ready' : ''}`} title={status?.detail}><i/>{status ? status.ready ? text.ready : text.needsSetup : text.unchecked}</span></div>;
 }
+const HistoryRow = memo(function HistoryRow({ item, formatter }: { item: Subtitle; formatter: Intl.DateTimeFormat }) {
+  return <li><time>{formatter.format(item.receivedAt)}</time><p>{item.text}</p><p className="source-text">{item.source}</p></li>;
+});
+const History = memo(function History({ history, language }: { history: Subtitle[]; language: Settings['uiLanguage'] }) {
+  const text = labels(language);
+  const formatter = useMemo(() => new Intl.DateTimeFormat(language === 'en' ? 'en-US' : 'ja-JP', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }), [language]);
+  return <section className="history">
+    <div className="history-header"><h1>{text.sessionHistory}</h1><div className="export-buttons">
+      <button className="secondary" disabled={!history.length} onClick={() => { void window.kotonoha?.export('txt'); }}><Icon name="download"/>TXT</button>
+      <button className="secondary" disabled={!history.length} onClick={() => { void window.kotonoha?.export('srt'); }}>SRT</button>
+    </div></div>
+    <p className="intro">{text.historyIntro}</p>
+    {history.length ? <ol className="transcript">{history.map((item) => <HistoryRow key={item.id} item={item} formatter={formatter}/>)}</ol> : <div className="empty"><Wave/><p>{text.historyEmpty}</p><span>{text.historyEmptyHint}</span></div>}
+  </section>;
+});
 export function Controls({ live }: { live: Live }) {
   const { settings, save, state, latest, history, visible, locked, error, setError, message, partial, readiness, checking, check, start, stop } = live;
   const text = labels(settings.uiLanguage);
@@ -62,7 +79,7 @@ export function Controls({ live }: { live: Live }) {
         </section>
         {latest ? <section className="last-caption"><span>{text.latestCaption}</span><p>{latest.text}</p></section> : null}
         <footer><Icon name="lock"/><span>{text.privacy}</span></footer>
-      </> : <section className="history"><div className="history-header"><h1>{text.sessionHistory}</h1><div className="export-buttons"><button className="secondary" disabled={!history.length} onClick={() => { void window.kotonoha?.export('txt'); }}><Icon name="download"/>TXT</button><button className="secondary" disabled={!history.length} onClick={() => { void window.kotonoha?.export('srt'); }}>SRT</button></div></div><p className="intro">{text.historyIntro}</p>{history.length ? <ol className="transcript">{history.map((item, index) => <li key={`${item.id}-${index}`}><time>{new Date(item.receivedAt).toLocaleTimeString(settings.uiLanguage === 'en' ? 'en-US' : 'ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time><p>{item.text}</p><p className="source-text">{item.source}</p></li>)}</ol> : <div className="empty"><Wave/><p>{text.historyEmpty}</p><span>{text.historyEmptyHint}</span></div>}</section>}
+      </> : <History history={history} language={settings.uiLanguage}/>}
     </div>
     <PermissionGuide live={live}/>
   </main>;

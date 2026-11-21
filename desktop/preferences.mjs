@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs';
+import { rename, unlink, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 export const defaultSettings = { source: 'en', target: 'ja', uiLanguage: 'ja', commitIntervalSeconds: 15, fontSize: 30, showOriginal: false, background: 0, expiry: 12 };
 function invalid(code) { const error = new Error(code); error.code = code; throw error; }
 export function validatedSettings(value) {
@@ -24,4 +26,46 @@ export function loadSettings(currentPath, legacyPaths = []) {
     catch { /* Skip absent, malformed, or incompatible preferences without overwriting them. */ }
   }
   return { ...defaultSettings };
+}
+
+async function writeSettings(file, value) {
+  const temporary = `${file}.${randomUUID()}.pending`;
+  try {
+    await writeFile(temporary, JSON.stringify(value), { encoding: 'utf8', mode: 0o600 });
+    await rename(temporary, file);
+  } finally {
+    await unlink(temporary).catch(() => {});
+  }
+}
+
+export function createSettingsWriter(file, { delay = 150, write = writeSettings } = {}) {
+  let pending = null;
+  let timer;
+  let lastWrite = Promise.resolve();
+
+  function commit() {
+    clearTimeout(timer);
+    timer = undefined;
+    if (!pending) return lastWrite;
+    const batch = pending;
+    pending = null;
+    // Serialize atomic replacements, including recovery after an earlier write failed.
+    lastWrite = lastWrite.catch(() => {}).then(() => write(file, batch.value));
+    lastWrite.then(batch.resolve, batch.reject);
+    return lastWrite;
+  }
+
+  return {
+    save(value) {
+      if (!pending) {
+        let resolve, reject;
+        const promise = new Promise((done, fail) => { resolve = done; reject = fail; });
+        pending = { value, promise, resolve, reject };
+      } else pending.value = value;
+      clearTimeout(timer);
+      timer = setTimeout(commit, delay);
+      return pending.promise;
+    },
+    flush: commit,
+  };
 }

@@ -112,6 +112,62 @@ test('history, export, error handling and source language conflicts', async ({ p
   await expect(page.getByRole('alert')).toContainText('音声の取得に失敗しました。');
 });
 
+test('capped history preserves rows and avoids repeated timestamp formatting during live updates', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => { if (['error', 'warning'].includes(message.type())) errors.push(message.text()); });
+  await bridge(page);
+  await page.addInitScript(() => {
+    window.testTimestampFormats = 0;
+    const originalTime = Date.prototype.toLocaleTimeString;
+    Date.prototype.toLocaleTimeString = function (...args) {
+      window.testTimestampFormats++;
+      return originalTime.apply(this, args);
+    };
+    const originalFormat = Object.getOwnPropertyDescriptor(Intl.DateTimeFormat.prototype, 'format');
+    Object.defineProperty(Intl.DateTimeFormat.prototype, 'format', {
+      configurable: true,
+      get() {
+        const format = originalFormat.get.call(this);
+        return (...args) => { window.testTimestampFormats++; return format(...args); };
+      },
+    });
+  });
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: '翻訳を開始', exact: true })).toBeEnabled();
+  await page.evaluate(() => {
+    for (let index = 0; index < 1000; index++) {
+      window.testEmit({ type: 'subtitle', id: `history-${index}`, source: `source ${index}`, text: `caption ${index}`, start: index, end: index + 1, latency_ms: 0, receivedAt: 1700000000000 + index * 1000 });
+    }
+  });
+  await page.getByRole('button', { name: /履歴/ }).click();
+  const rows = page.locator('.transcript li');
+  await expect(rows).toHaveCount(1000);
+  expect(await page.evaluate(() => window.testTimestampFormats)).toBe(1000);
+  await page.evaluate(() => {
+    window.testHistoryRows = [...document.querySelectorAll('.transcript li')];
+    window.testEmit({ type: 'partial', text: 'A new partial transcript' });
+  });
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  expect(await page.evaluate(() => window.testTimestampFormats)).toBe(1000);
+  await page.evaluate(() => window.testEmit({ type: 'subtitle', id: 'history-1000', source: 'source 1000', text: 'caption 1000', start: 1000, end: 1001, latency_ms: 0, receivedAt: 1700001000000 }));
+  await expect(rows.last()).toContainText('caption 1000');
+  await expect(rows.first()).toContainText('caption 1');
+  await expect(rows).toHaveCount(1000);
+  expect(await page.evaluate(() => window.testHistoryRows.slice(1).filter((row) => row.isConnected).length)).toBe(999);
+  expect(await page.evaluate(() => window.testTimestampFormats)).toBe(1001);
+  await page.evaluate(async () => {
+    const { settings } = await window.kotonoha.snapshot();
+    await window.kotonoha.settings({ ...settings, uiLanguage: 'en' });
+  });
+  await expect(page.getByRole('heading', { name: 'History for this session', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => window.testTimestampFormats)).toBe(2001);
+  const expectedTime = await page.evaluate(() => new Date(1700000001000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+  await expect(rows.first().locator('time')).toHaveText(expectedTime);
+  await expect(page.locator('vite-error-overlay')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test('transcript exports retain every translation and valid monotonic timings', () => {
   const values = [{ ...subtitle, receivedAt: 1000 }, { ...subtitle, id: '2', start: 0, end: 2, receivedAt: 2000 }];
   expect(formatTranscript(values, 'srt')).toBe('1\n00:00:00,000 --> 00:00:03,000\n言葉と言葉をつなぐ架け橋。\n\n2\n00:00:03,000 --> 00:00:05,000\n言葉と言葉をつなぐ架け橋。\n');
