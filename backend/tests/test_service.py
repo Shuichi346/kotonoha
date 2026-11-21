@@ -9,7 +9,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from backend.app import SessionManager, create_app
 from backend.pipeline import LiveSession
-from backend.translation import translation_messages
+from backend.translation import translation_prompt
 
 
 class FakeTranslator:
@@ -268,31 +268,12 @@ async def test_translation_failure_is_reported_and_capture_is_released():
     assert events[-1]["state"] == "stopped"
 
 
-def test_hy_mt2_translation_prompt():
-    message = translation_messages("Hello", "en", "ja")[0]
-    assert message == {
-        "role": "user",
-        "content": "Translate the following text into Japanese. Note that you should only "
-        "output the translated result without any additional explanation:\n\nHello",
-    }
-
-
-def test_hy_mt2_preserves_checkpoint_stop_tokens(monkeypatch):
-    import sys
-    from types import SimpleNamespace
-    from unittest.mock import Mock
-
-    from backend.translation import Translator
-
-    tokenizer = Mock()
-    monkeypatch.setitem(
-        sys.modules, "mlx_lm", SimpleNamespace(load=lambda path: (object(), tokenizer))
+def test_plamo_translation_prompt():
+    assert translation_prompt("Hello", "en", "ja") == (
+        "<|plamo:tag|>dataset<|plamo:msg|>translation"
+        "<|plamo:tag|>input<|plamo:key|>lang<|plamo:val|>en<|plamo:msg|>Hello"
+        "<|plamo:tag|>output<|plamo:key|>lang<|plamo:val|>ja<|plamo:msg|>"
     )
-    monkeypatch.setattr("backend.translation.translation_ready", lambda: True)
-    translator = Translator()
-    translator._load()
-    tokenizer.add_eos_token.assert_not_called()
-    translator.close()
 
 
 async def test_periodic_commit_does_not_finish_stop_before_final_commit():

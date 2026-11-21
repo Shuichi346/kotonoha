@@ -400,7 +400,7 @@ test('compact controller keeps primary controls usable and lower settings reacha
   await page.getByRole('switch', { name: '原文も表示', exact: true }).check();
   await expect(page.getByRole('switch', { name: '原文も表示', exact: true })).toBeChecked();
   await page.getByText('ローカルモデル', { exact: true }).scrollIntoViewIfNeeded();
-  await expect(page.getByText('Hy-MT2 1.8B', { exact: true })).toBeVisible();
+  await expect(page.getByText('PLaMo 3 Translate 0.8B', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '設定', exact: true }).click();
   await page.getByLabel('Language', { exact: true }).selectOption('en');
   await page.getByRole('button', { name: 'Live translation', exact: true }).click();

@@ -30,8 +30,8 @@ YouTubeやブラウザ、普段使っている動画プレーヤーでそのま�
 ## 主な機能
 
 - **使用中のアプリに重ねて字幕を表示。** 字幕ウィンドウを移動・サイズ変更し、ロックするとクリックが下のアプリに届きます。
-- **音声認識と翻訳をローカルで実行。** Nemotron 3.5がNeMo-Speech.cppとMetalを使って文字起こしし、4-bit量子化したHy-MT2 1.8BがMLXを使って翻訳します。
-- **9言語を選択可能。** 音声と字幕の言語として、英語、日本語、ドイツ語、フランス語、スペイン語、イタリア語、ポルトガル語、中国語、韓国語を選べます。
+- **音声認識と翻訳をローカルで実行。** Nemotron 3.5がNeMo-Speech.cppとMetalを使って文字起こしし、GGUF Q8_0形式のPLaMo 3 Translate 0.8Bがllama.cppとMetalを使って翻訳します。
+- **8言語を選択可能。** 音声と字幕の言語として、英語、日本語、ドイツ語、フランス語、スペイン語、イタリア語、中国語（簡体字）、韓国語を選べます。
 - **字幕表示を調整。** 文字サイズ、原文の表示、背景の不透明度、字幕の表示時間を設定できます。新しい設定では文字サイズは30 px、原文表示はオフです。
 - **日本語と英語の操作画面。** 音声・字幕の言語ペアとは別に、画面の表示言語を切り替えられます。
 - **セッション履歴と書き出し。** 直近1,000件の字幕を確認し、TXTまたはSRTに明示的に書き出せます。履歴はメモリ上に保持され、アプリ終了時に消去されます。
@@ -64,6 +64,7 @@ YouTubeやブラウザ、普段使っている動画プレーヤーでそのま�
 | Python | Python 3.13、`uv`で管理 |
 | ネイティブツールチェーン | macOS SDKを含むXcodeコマンドラインツール |
 | 音声認識ランタイム | Metal対応のarm64版`nemo-speech` CLI。0.2.0で動作確認済み |
+| 翻訳ランタイム | Metal対応のarm64版`llama-server`（llama.cpp 1.0.0以降） |
 | モデルの準備 | 音声認識・翻訳モデルのダウンロードに必要なインターネット接続 |
 
 ### 事前準備（初回のみ）
@@ -71,7 +72,7 @@ YouTubeやブラウザ、普段使っている動画プレーヤーでそのま�
 Xcodeまたは`xcode-select --install`でGitとmacOS SDK・Swiftツールチェーンを導入します。[Node.js](https://nodejs.org/en/download) **26.5以降**と**npm 12.0.1以降**、[uv](https://docs.astral.sh/uv/getting-started/installation/)も必要です。Homebrew導入済みなら、uvとPythonは次のように準備できます。
 
 ```sh
-brew install uv
+brew install uv llama.cpp
 uv python install 3.13
 ```
 
@@ -82,6 +83,8 @@ curl -fsSL https://github.com/NVIDIA/NeMo-Speech.cpp/raw/main/scripts/install.sh
 ```
 
 下記のビルドスクリプトでarm64版であることとMetal対応を確認します。NeMoは0.2.0で動作確認済みです。アプリはインストール済みCLIを`PATH`、`~/.local/bin/nemo-speech`の順で探し、別のNeMoをビルド・同梱しません。標準以外の場所に導入した場合は`NEMO_SPEECH_BIN`に実行ファイルの絶対パスを指定できます。ソースから導入してモデル索引が`<実体の実行ファイルのprefix>/share/nemo-speech/model-index.json`にない場合は、`NEMO_SPEECH_MODEL_INDEX`にも索引の絶対パスを指定してください。
+
+翻訳にはインストール済みの`llama-server`を使います（llama.cpp 1.0.0で動作確認）。ビルド後も削除しないでください。`PATH`、`/opt/homebrew/bin/llama-server`の順で探します。別の場所にある場合は`KOTONOHA_LLAMA_SERVER`に絶対パスを指定できます。翻訳エンジンは認証付きの専用Unixソケットで接続し、TCPポートを追加せず、アプリ終了時に停止します。
 
 ### ローカルアプリのパッケージ
 
@@ -119,12 +122,14 @@ cd kotonoha
 
 ### 共有モデルキャッシュ
 
-`npm run prepare:models`は次の共有キャッシュを準備し、保存済みファイルを再利用します。モデルのパスを手動指定する必要はありません。使用する2モデルは合計約1.7 GiBで、ほかに依存関係とアプリのビルド用の空き容量が必要です。利用条件は各モデルカードを確認してください。
+`npm run prepare:models`は次の共有キャッシュを準備し、保存済みファイルを再利用します。モデルのパスを手動指定する必要はありません。使用する2モデルは合計約1.5 GiBで、ほかに依存関係とアプリのビルド用の空き容量が必要です。利用条件は各モデルカードを確認してください。
 
 | モデル | 標準の共有キャッシュ |
 | --- | --- |
-| [Hy-MT2-1.8B-4bit](https://huggingface.co/mlx-community/Hy-MT2-1.8B-4bit) | `~/.cache/huggingface/hub` |
+| [PLaMo 3 Translate 0.8B Q8_0](https://huggingface.co/mradermacher/plamo-3-translate-0.8b-GGUF/blob/main/plamo-3-translate-0.8b.Q8_0.gguf) | `~/.cache/huggingface/hub` |
 | [Nemotron 3.5 ASR](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b)（NeMoが管理） | `~/Library/Caches/NeMoSpeech/models` |
+
+準備処理は固定revisionの`plamo-3-translate-0.8b.Q8_0.gguf`だけを取得し、SHA-256を検証します。原モデルは[pfnet/plamo-3-translate-0.8b](https://huggingface.co/pfnet/plamo-3-translate-0.8b)です。利用条件はモデルカードのPLaMo Community Licenseを確認してください。画面の言語候補は英語・日本語・ドイツ語・フランス語・スペイン語・イタリア語・中国語（簡体字）・韓国語です。ポルトガル語は対象外となり、保存済みの該当言語設定だけを英語／日本語へ移行し、字幕の外観設定は保持します。
 
 翻訳モデルはキャッシュ内の最新版ではなく、[backend/config.py](backend/config.py)に固定されたリビジョンを使います。NeMoはインストール済みのモデル索引から`nemotron-3.5`を選びます。起動環境で指定された`HF_HOME` / `HF_HUB_CACHE`と`NEMO_SPEECH_MODEL_DIR`にも対応しますが、Finder起動はシェル設定を引き継がないため標準の保存先を推奨します。準備と起動で同じキャッシュ設定を使ってください。[Hugging Faceの説明](https://huggingface.co/docs/huggingface_hub/guides/manage-cache)と[NeMoの説明](https://github.com/NVIDIA/NeMo-Speech.cpp/blob/main/docs/cli.md#models-and-cache)も参照できます。
 
@@ -182,7 +187,7 @@ cd kotonoha
 Macのシステム音声
   → Swift / ScreenCaptureKit (16 kHz mono PCM16)
   → NeMo-Speech.cpp / Metal (ストリーミング文字起こし)
-  → Hy-MT2 / MLX (翻訳)
+  → PLaMo 3 Translate / llama.cpp (GGUF Q8_0) (翻訳)
   → Electron字幕ウィンドウ
 ```
 
@@ -190,7 +195,7 @@ Macのシステム音声
 | --- | --- |
 | [frontend/](frontend/) | React、TypeScript、Viteを使ったコントローラーと字幕画面 |
 | [desktop/](desktop/) | Electronウィンドウ、メニュー、ショートカット、設定、IPC、書き出し、プロセス管理 |
-| [backend/](backend/) | Python 3.13 / FastAPIサービス、ストリーミング音声処理、常駐MLX翻訳エンジン |
+| [backend/](backend/) | Python 3.13 / FastAPIサービス、ストリーミング音声処理、常駐llama.cpp GGUF翻訳エンジン |
 | [native/](native/) | Swift製のシステム音声取り込みヘルパー。マイク入力は無効で、動画サンプルは配信・保存されません |
 | [scripts/](scripts/) | ビルド、モデルランタイムの準備、パッケージ化、アーキテクチャ確認、デスクトップのスモークチェック |
 

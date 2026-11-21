@@ -1,5 +1,19 @@
 # Notes
 
+## Application version source — 2026-11-21
+
+Use 0.2.0 to identify the PLaMo translator release after the 0.1.0 baseline. `scripts/package.mjs` reads `package.json` for both `appVersion` and `buildVersion`, so macOS bundle metadata and Electron's About version agree. Keep the root npm lock metadata and Python project/uv virtual-package version aligned when bumping the app. `scripts/smoke-desktop.mjs` checks the actual packaged `app.getVersion()` against the current package version. The capture helper retains its independently versioned metadata and permission identity; this release changes the parent application's version. Acceptance and output identifiers are in PLANS.md.
+
+## PLaMo Q8_0 runtime — 2026-11-21
+
+The user selected the exact mradermacher `plamo-3-translate-0.8b.Q8_0.gguf`, not an MLX equivalent. `backend/config.py` pins its repo revision/filename/size/hash; explicit preparation downloads only this artifact and hashes it once. Offline readiness verifies its exact path/size/magic and installed engine presence. Keep the former caches/builds available. MLX was removed from the Python dependency graph because the requested format needs llama.cpp; the app relies on the installed arm64 1.0.0+ `llama-server` remaining available, like the existing base Python and NeMo prerequisite.
+
+PLaMo uses PFML3 and language codes, with `zh` mapped to `zh-hans`. `/tokenize` adds BOS once and `/completion` receives the resulting token IDs with temperature 0 and both PFN stop markers. The GGUF embedded chat template requires `target_lang`; llama.cpp's generic chat-parser discovery omits it and aborts startup, even when the app uses only completions. Preserve `--no-jinja --chat-template chatml` solely to bypass this unused chat parser. Do not wrap the raw PFML3 prompt in chatml. Tests pin these launch flags and source/target/BOS/stop contracts. Readiness does not load weights; capture still requires explicit Start and permission preflight.
+
+The worker runs over an authenticated socket in a short private `/tmp` directory, avoiding macOS Unix path limits and additional TCP port allocation. Its process inherits the backend group so Electron's quit cleanup owns all descendants. The executor serializes loading/inference; close terminates/waits/kills and removes the client/socket. Tests cover startup retries/failure/timeouts, auth probes and bounded cleanup. Real source and staged-runtime checks established valid translations in four directions plus auth/no-auth and shutdown cleanup; synthetic text timing is not audio latency.
+
+Portuguese is absent from PFN's supported languages. The visible set is now eight languages; backend validation also excludes undocumented codes. Loading a former Portuguese pair changes only its language fields to a supported distinct pair, keeps appearance/UI/interval settings, and leaves the legacy file bytes intact. Builder version probes must combine llama.cpp stdout/stderr, because version output is on stderr; SDK probes remain stdout-only. Acceptance and artifact/runtime identifiers are recorded only in PLANS.md. Actual recording and long-form translation quality were not tested.
+
 ## Automatic local port fallback — 2026-10-17
 
 Fixed ports conflicted with unrelated projects. `backend/ports.py` defines disjoint primary-plus-five pools: API 8765/8770–8774, NeMo 8766/8780–8784. The API binds/listens once and hands that same socket to installed Uvicorn 0.54.0, avoiding a check-then-bind race. Its private stdout reports `service_port` or `ports_unavailable`; `desktop/backend-startup.mjs` validates the report before Electron uses the selected port for HTTP/WebSocket. Port 8767 remains isolated for default smoke tests. Never discover another project through its status response or terminate it to free a port.

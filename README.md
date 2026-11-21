@@ -30,8 +30,8 @@ The compact controller and subtitle window are independent. The light-gray guide
 ## Features
 
 - **Subtitles over your existing apps.** Move and resize the floating subtitle window, then lock it so clicks pass through to the app below.
-- **Local speech and translation.** Nemotron 3.5 transcribes through NeMo-Speech.cpp with Metal; Hy-MT2 1.8B, quantized to 4-bit, translates through MLX.
-- **Nine selectable languages.** English, Japanese, German, French, Spanish, Italian, Portuguese, Chinese, and Korean are available for both audio and subtitles.
+- **Local speech and translation.** Nemotron 3.5 transcribes through NeMo-Speech.cpp with Metal; PLaMo 3 Translate 0.8B, quantized to GGUF Q8_0, translates through llama.cpp with Metal.
+- **Eight selectable languages.** English, Japanese, German, French, Spanish, Italian, Chinese (Simplified), and Korean are available for both audio and subtitles.
 - **Adjustable display.** Set text size, original-text visibility, background opacity, and caption expiry. New preferences use 30 px text with original text off.
 - **Japanese and English controls.** Change the interface language independently of the audio/subtitle language pair.
 - **Session history and export.** Review the latest 1,000 caption entries and explicitly export TXT or SRT. History stays in memory and is cleared when the app quits.
@@ -64,6 +64,7 @@ Each user **clones this repository and builds on their own Mac**. The packaged `
 | Python | Python 3.13, managed with `uv` |
 | Native toolchain | Xcode command-line tools with a macOS SDK |
 | Speech runtime | arm64 `nemo-speech` CLI with Metal support; verified with 0.2.0 |
+| Translation runtime | arm64 `llama-server` from llama.cpp 1.0.0 or later with Metal support |
 | Model preparation | Internet access to download the speech and translation models |
 
 ### Prepare the tools once
@@ -71,7 +72,7 @@ Each user **clones this repository and builds on their own Mac**. The packaged `
 Install Git and the macOS SDK/Swift toolchain using Xcode or `xcode-select --install`. Install [Node.js](https://nodejs.org/en/download) **26.5 or later** with **npm 12.0.1 or later**, and [uv](https://docs.astral.sh/uv/getting-started/installation/). On a Mac with Homebrew, uv and Python can be prepared with:
 
 ```sh
-brew install uv
+brew install uv llama.cpp
 uv python install 3.13
 ```
 
@@ -82,6 +83,8 @@ curl -fsSL https://github.com/NVIDIA/NeMo-Speech.cpp/raw/main/scripts/install.sh
 ```
 
 The build script below checks arm64 and Metal support. NeMo 0.2.0 is the tested version. The app reuses the installed CLI, checking `PATH` and then `~/.local/bin/nemo-speech`; it does not build or bundle another copy. For a nonstandard installation, set `NEMO_SPEECH_BIN` to its absolute executable path. Source builds must also provide the model index via `NEMO_SPEECH_MODEL_INDEX` if it is not at `<resolved executable prefix>/share/nemo-speech/model-index.json`.
+
+The app also reuses the installed `llama-server` (tested with llama.cpp 1.0.0). Keep it installed after building. It checks `PATH`, then `/opt/homebrew/bin/llama-server`; a custom absolute path can be set with `KOTONOHA_LLAMA_SERVER`. Translation uses an authenticated private Unix socket, adds no TCP listener, and stops with the app.
 
 ### Local app packaging
 
@@ -119,16 +122,18 @@ For development, run `npm start` from the checkout after the script has prepared
 
 ### Shared model caches
 
-`npm run prepare:models` prepares the shared caches below, reusing files already present. No manual model-path selection is needed. The two active models total approximately 1.7 GiB; allow additional space for dependencies and app builds. Refer to each model card for its terms.
+`npm run prepare:models` prepares the shared caches below, reusing files already present. No manual model-path selection is needed. The two active models total approximately 1.5 GiB; allow additional space for dependencies and app builds. Refer to each model card for its terms.
 
 | Model | Default shared cache |
 | --- | --- |
-| [Hy-MT2-1.8B-4bit](https://huggingface.co/mlx-community/Hy-MT2-1.8B-4bit) | `~/.cache/huggingface/hub` |
+| [PLaMo 3 Translate 0.8B Q8_0](https://huggingface.co/mradermacher/plamo-3-translate-0.8b-GGUF/blob/main/plamo-3-translate-0.8b.Q8_0.gguf) | `~/.cache/huggingface/hub` |
 | [Nemotron 3.5 ASR](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b), managed by NeMo | `~/Library/Caches/NeMoSpeech/models` |
 
 The translator uses the exact revision pinned in [backend/config.py](backend/config.py), not whichever revision is newest in the cache. NeMo selects `nemotron-3.5` from its installed model index. The app honors `HF_HOME` / `HF_HUB_CACHE` and `NEMO_SPEECH_MODEL_DIR` in its launch environment; use the defaults for Finder launches, which do not inherit shell configuration. Preparation and launch must use the same settings. See the [Hugging Face cache guide](https://huggingface.co/docs/huggingface_hub/guides/manage-cache) and [NeMo cache guide](https://github.com/NVIDIA/NeMo-Speech.cpp/blob/main/docs/cli.md#models-and-cache).
 
 Models are not copied into the checkout or packaged runtime. Existing `models/` folders and older runtime snapshots are preserved but are not used by new builds. Keep the shared cache files available; after removing them, rerun `npm run prepare:models`. Startup/status checks do not download models or load them into memory.
+
+Preparation downloads only `plamo-3-translate-0.8b.Q8_0.gguf` from the pinned revision and verifies its SHA-256. The original model is [pfnet/plamo-3-translate-0.8b](https://huggingface.co/pfnet/plamo-3-translate-0.8b); see its model card for the PLaMo Community License. The visible language choices are English, Japanese, German, French, Spanish, Italian, Chinese (Simplified), and Korean. Portuguese is no longer offered; saved Portuguese language fields migrate to English/Japanese while preserving caption appearance.
 
 Models load when translation first starts and stay warm between sessions. Once prepared, transcription and translation use local model files.
 
@@ -182,7 +187,7 @@ Speech recognition and translation can make mistakes, especially with names, num
 Mac system audio
   → Swift / ScreenCaptureKit (16 kHz mono PCM16)
   → NeMo-Speech.cpp / Metal (streaming transcription)
-  → Hy-MT2 / MLX (translation)
+  → PLaMo 3 Translate / llama.cpp (GGUF Q8_0) (translation)
   → Electron subtitle window
 ```
 
@@ -190,7 +195,7 @@ Mac system audio
 | --- | --- |
 | [frontend/](frontend/) | React, TypeScript, and Vite controller and subtitle views |
 | [desktop/](desktop/) | Electron windows, menus, shortcuts, preferences, IPC, exports, and process ownership |
-| [backend/](backend/) | Python 3.13 / FastAPI service, streaming speech pipeline, and persistent MLX translator |
+| [backend/](backend/) | Python 3.13 / FastAPI service, streaming speech pipeline, and persistent llama.cpp GGUF translator |
 | [native/](native/) | Swift system-audio capture helper; microphone capture is disabled and video samples are not delivered or stored |
 | [scripts/](scripts/) | Build, model-runtime staging, packaging, architecture checks, and desktop smoke checks |
 

@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { readdirSync, statSync } from 'node:fs';
-const roots = [process.env.KOTONOHA_CHECK_APP || 'release/kotonoha-darwin-arm64/kotonoha.app', 'native/bin', '.venv/lib/python3.13/site-packages/mlx'];
+const roots = [process.env.KOTONOHA_CHECK_APP || 'release/kotonoha-darwin-arm64/kotonoha.app', 'native/bin'];
 let checked = 0;
 function walk(path) {
   for (const name of readdirSync(path)) {
@@ -19,10 +19,12 @@ function walk(path) {
 }
 roots.forEach(walk);
 const nemo = execFileSync('.venv/bin/python', ['-c', 'from backend.config import nemo_binary; print(nemo_binary() or "")'], { encoding: 'utf8' }).trim();
+const llama = execFileSync('.venv/bin/python', ['-c', 'from backend.config import llama_binary; print(llama_binary() or "")'], { encoding: 'utf8' }).trim();
 if (!nemo) throw new Error('Installed nemo-speech executable not found');
-for (const path of ['.venv/bin/python', nemo]) {
+if (!llama) throw new Error('Installed llama-server executable not found');
+for (const path of ['.venv/bin/python', nemo, llama]) {
   const arches = execFileSync('/usr/bin/lipo', ['-archs', path], { encoding: 'utf8' }).trim();
   if (!arches.split(/\s+/).includes('arm64')) throw new Error(`arm64 unavailable: ${path}`);
   console.log(`${path}: ${arches}`);
 }
-console.log(`Verified arm64 support in ${checked} bundled executables/libraries and Python/NeMo.`);
+console.log(`Verified arm64 support in ${checked} bundled executables/libraries and Python/NeMo/llama.cpp.`);

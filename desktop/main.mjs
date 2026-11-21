@@ -269,8 +269,8 @@ app.on('before-quit', (event) => {
           child.kill('SIGTERM');
         });
       }
-      // NeMo and the capture helper belong to this detached process group.
-      // Kill the group after graceful Python shutdown so a stalled MLX worker cannot orphan them.
+      // NeMo, llama.cpp and the capture helper belong to this detached process group.
+      // Kill the group after graceful Python shutdown so a stalled translation worker cannot orphan them.
       try { process.kill(-child.pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') console.error('Could not stop audio service:', error.message); }
     }
     app.quit();

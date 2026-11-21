@@ -4,7 +4,7 @@ import type { Live } from './useLive';
 import type { ModelStatus } from './types';
 import { labels, uiLanguage } from './i18n';
 import { PermissionGuide } from './PermissionGuide';
-const languages = [{ code: 'en', name: 'English' }, { code: 'ja', name: '日本語' }, { code: 'de', name: 'Deutsch' }, { code: 'fr', name: 'Français' }, { code: 'es', name: 'Español' }, { code: 'it', name: 'Italiano' }, { code: 'pt', name: 'Português' }, { code: 'zh', name: '中文' }, { code: 'ko', name: '한국어' }];
+const languages = [{ code: 'en', name: 'English' }, { code: 'ja', name: '日本語' }, { code: 'de', name: 'Deutsch' }, { code: 'fr', name: 'Français' }, { code: 'es', name: 'Español' }, { code: 'it', name: 'Italiano' }, { code: 'zh', name: '中文' }, { code: 'ko', name: '한국어' }];
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange(value: boolean): void }) {
   return <div className="toggle-row"><span>{label}</span><input type="checkbox" role="switch" aria-label={label} checked={checked} onChange={(event) => onChange(event.target.checked)}/><span className="switch" aria-hidden="true"/></div>;
 }
@@ -56,7 +56,7 @@ export function Controls({ live }: { live: Live }) {
           </div></details>
           <button className="secondary full" onClick={() => { void window.kotonoha?.hideController(); }}><Icon name="external"/>{text.subtitlesOnly}<span className="shortcut">{text.returnShortcut}</span></button>
         </section>
-        <section className="models"><div className="section-heading"><h2>{text.models}</h2><button aria-label={text.checkReadiness} title={text.checkReadiness} disabled={checking || live.requestingPermission} onClick={() => { void check(); }}><Icon name="refresh"/></button></div><div className="model-list"><ModelRow text={text} title="Nemotron 3.5" status={readiness?.asr}/><ModelRow text={text} title="Hy-MT2 1.8B" status={readiness?.translation}/></div>
+        <section className="models"><div className="section-heading"><h2>{text.models}</h2><button aria-label={text.checkReadiness} title={text.checkReadiness} disabled={checking || live.requestingPermission} onClick={() => { void check(); }}><Icon name="refresh"/></button></div><div className="model-list"><ModelRow text={text} title="Nemotron 3.5" status={readiness?.asr}/><ModelRow text={text} title="PLaMo 3 Translate 0.8B" status={readiness?.translation}/></div>
           {readiness ? <details className="diagnostics"><summary>{text.readinessDetails}</summary><ul>{[[text.capture, readiness.capture], [text.transcription, readiness.asr], [text.translation, readiness.translation]].map(([name, item]) => <li key={name as string}><strong>{name as string}</strong><p>{(item as ModelStatus).permission === 'required' ? text.permissionRequired : (item as ModelStatus).detail}</p></li>)}</ul></details> : null}
         </section>
         {latest ? <section className="last-caption"><span>{text.latestCaption}</span><p>{latest.text}</p></section> : null}

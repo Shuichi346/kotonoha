@@ -21,6 +21,8 @@ try {
     }
   }
   desktop = await electron.launch({ executablePath: path.resolve(process.env.KOTONOHA_SMOKE_APP || 'release/kotonoha-darwin-arm64/kotonoha.app/Contents/MacOS/kotonoha'), env, timeout: 15000 });
+  const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.equal(await desktop.evaluate(({ app }) => app.getVersion()), version);
   const errors = [];
   desktop.on('window', (page) => page.on('pageerror', (error) => errors.push(error.message)));
   await desktop.firstWindow();
@@ -99,9 +101,9 @@ try {
   assert.equal(menus[1].label, 'Edit');
   assert.equal(result.status.asr.ready, true);
   assert.equal(result.status.translation.ready, true);
-  assert.equal(result.status.translation.detail, 'Hy-MT2 1.8B · MLX 4-bit');
+  assert.equal(result.status.translation.detail, 'PLaMo 3 Translate 0.8B · GGUF Q8_0');
   // Hidden smoke windows need a rendered model label, not on-screen visibility.
-  await controller.getByText('Hy-MT2 1.8B', { exact: true }).waitFor({ state: 'attached', timeout: 5000 });
+  await controller.getByText('PLaMo 3 Translate 0.8B', { exact: true }).waitFor({ state: 'attached', timeout: 5000 });
   assert.equal(result.after.visible, false);
   assert.equal(result.after.locked, true);
   assert.deepEqual(await desktop.evaluate(({ BrowserWindow }) => ({

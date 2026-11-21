@@ -100,8 +100,40 @@ This is the single authoritative implementation and acceptance checklist. The or
 - [x] PFP1 — Package separately, inspect architecture, and smoke the actual artifact without capture.
 - [x] PFD1 — Align operating documentation and durable project guidance.
 
-Current: Complete — both services automatically use up to five backup ports, with localized exhaustion errors and verified packaged fallback behavior. The initial working tree was clean; previous acceptance remains historical evidence for unaffected behavior.
-Next: None.
+- [x] PG1 — Switch to the exact pinned PLaMo 3 Translate 0.8B Q8_0 GGUF, explicit preparation, PFML3, and a persistent authenticated llama.cpp runtime.
+- [x] PGV1 — Verify offline cache checks, prompt/stop/language contracts, worker lifecycle, existing checks, and actual GGUF inference without audio capture.
+- [x] PGP1 — Package a separate arm64 app and verify the staged translator and hidden startup.
+- [x] PGD1 — Update both READMEs and durable model/runtime guidance.
+
+- [x] VR1 — Bump the app/backend metadata to 0.2.0 and derive packaged app/build versions from package.json.
+- [x] VRV1 — Verify lockfiles, build a separate app, and check macOS bundle/runtime version plus hidden startup.
+- [x] VRD1 — Record the version rationale and final artifact.
+
+Current: Complete — version 0.2.0 is packaged and verified; the PLaMo model migration remains intact.
+Next: User quits the prior app and opens the new 0.2.0 build.
+
+## Application version 0.2.0 — 2026-11-21
+
+VR1: raised parent app/npm/Python metadata from 0.1.0 to 0.2.0 to identify the translator migration. Packaging now reads package.json for both appVersion/buildVersion instead of hardcoding a second version. npm lock root metadata was synchronized; offline uv lock/sync/check changed only the virtual kotonoha package version. Existing uncommitted PLaMo migration edits and prior builds were preserved. The unchanged capture helper retains its independent version and permission identity.
+
+VRV1: frontend type/build, 23 Node desktop/build tests, offline uv lock validation, and whitespace checks passed. The separate app `release/build-v0.2.0-20261121/kotonoha-darwin-arm64/kotonoha.app` selects runtime `61ffe70e15355841`. Verified `CFBundleShortVersionString`, `CFBundleVersion`, archived package.json and actual running Electron `app.getVersion()` all equal 0.2.0. Staged translator/config bytes match the already-verified PLaMo source; architecture inspection passed for 30 bundled Mach-O components and Python/NeMo/llama.cpp. Hidden startup passed with both models ready, two windows, authenticated IPC and zero renderer errors; Start was intercepted and no recording/permission request occurred. The optional .icon-format warning remains nonfatal. Unchanged translation/audio/UI suites reuse the immediately preceding migration acceptance.
+
+VRD1: recorded the version source/rationale in NOTES and AGENTS, appended the same-day changelog entry, and reviewed documentation/whitespace. No existing app replacement, running-app restart, commit, push or merge occurred.
+
+## PLaMo GGUF migration — 2026-11-21
+
+Use exactly `mradermacher/plamo-3-translate-0.8b-GGUF` / `plamo-3-translate-0.8b.Q8_0.gguf`, pinned revision `3a3ba78e02c862bc3b136a30625d7157666c827f`. The installed llama.cpp 1.0.0 supports plamo3 and PFML3; MLX does not load this GGUF. Reuse the installed arm64 Metal runtime through a persistent authenticated server over a private Unix socket, owned by the backend process group. Use direct PFML3 source/target language codes (`zh` maps to `zh-hans`), BOS once, greedy decoding and both PFN stop tokens. Retain the 1700-input/512-output bounds, final stop drain, explicit model preparation and shared caches. Readiness stays offline; preparation verifies the exact file SHA-256. Remove unsupported Portuguese from visible language choices and migrate only incompatible saved language fields. Preserve old caches/builds/running apps.
+
+Bounded acceptance: focused and full backend tests (60 seconds), Ruff (30 seconds), Node tests (30 seconds), frontend build (30 seconds/stage), scripted UI checks (existing finite runner), real synthetic text inference (120 seconds), separate packaging (180 seconds), arm64 inspection (60 seconds), hidden startup smoke (45 seconds). Do not record audio, request permission, replace running apps, commit, push or merge. Actual playback quality/latency remains user-initiated.
+
+PG1/PGV1: exact artifact preparation and SHA-256 verification passed; NeMo reused its installed shared cache. Python dependencies/uv.lock no longer require MLX. Final checks passed: 126 backend tests, Ruff lint/format, 23 Node desktop/build tests, frontend type/build and all 16 UI tests. Source model-only acceptance passed for English→Japanese, Japanese→English, Chinese→Korean and Korean→Chinese, including nonempty target-script text, no control-token leakage, authenticated access/401 without credentials, persistent worker reuse, child termination and socket removal. Startup took 1.19 seconds; four short translations took 0.15–0.33 seconds, not an end-to-end audio-latency benchmark.
+
+Actual integration exposed two issues that mocks initially missed. First, llama.cpp's automatic chat-parser discovery invoked PLaMo's embedded template without `target_lang`, causing startup failure in both sandboxed and permitted runs. A diagnostic run identified this; `--no-jinja --chat-template chatml` disables discovery while raw `/completion` continues to use the explicit PFML3/token IDs. Second, actual `llama-server --version` writes to stderr, so builder diagnostics initially failed; its version probe now combines streams while the generic SDK probe remains stdout-only, and the stub regression reproduces stderr output. Real prerequisite diagnostics passed after repair. Existing FastAPI TestClient deprecation and optional `.icon` packager warnings remain nonfatal.
+
+PGP1: separate package `release/build-plamo-q8-20261121/kotonoha-darwin-arm64/kotonoha.app` selects runtime `927f32a938c8ac52`. Packaging built the unchanged native helper, architecture inspection verified 30 bundled Mach-O components plus arm64 Python/NeMo/llama.cpp, and exact comparisons verified source/staged backend, archived desktop/UI and tracked ICNS bytes. The first icon comparison assumed `kotonoha.icns`; it was corrected to the actual `CFBundleIconFile` value `electron.icns`, then passed without app changes. The staged runtime, invoked from `/private/tmp` with its own Python/import root, passed the same four-direction inference/auth/cleanup check (startup 1.94 seconds; short translations 0.13–0.35 seconds). Hidden app startup passed: both models ready, two windows, authenticated IPC, correct PLaMo labels, zero renderer errors, and stopped capture. The smoke intercepted Start. No recording or permission request occurred, no running app was replaced/restarted, and no Git commit/push/merge was performed.
+
+PGD1: both READMEs, backend documentation, CHANGELOG, NOTES and AGENTS now describe the exact GGUF, installed llama.cpp prerequisite, private socket lifecycle, eight visible languages and compatible preference migration. A bounded independent read-only review found no actionable issue. Documentation/whitespace review passed. Actual system-audio translation and long-form quality remain unmeasured; the user must explicitly open the new build and Start playback translation.
+
 
 ## Automatic Local Port Fallback — 2026-10-17
 

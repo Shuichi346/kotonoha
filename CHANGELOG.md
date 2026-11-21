@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-21
+
+### Changed
+
+- Raised the application/backend version to 0.2.0 for the PLaMo migration, synchronized npm/uv metadata, and derived macOS app/build versions from package.json to keep About/Finder version information aligned.
+- Replaced Hy-MT2/MLX translation with the requested pinned PLaMo 3 Translate 0.8B Q8_0 GGUF through a persistent, authenticated llama.cpp Metal worker on a private Unix socket. Added exact-file download/hash verification and the installed llama.cpp build prerequisite; removed MLX Python dependencies.
+- Updated model labels and operating documentation, limited language choices to model-supported pairs, and migrated saved Portuguese language fields while retaining caption appearance. Created a separate verified arm64 app without replacing previous builds.
+
 ## 2026-10-17
 
 ### Fixed

@@ -26,6 +26,22 @@ test('legacy settings migrate with Japanese UI and preserve subtitle preferences
   writeFileSync(current, JSON.stringify({ ...loaded, uiLanguage: 'en' }));
   assert.equal(loadSettings(current, [old]).uiLanguage, 'en');
 });
+test('Portuguese preferences migrate language fields while preserving saved appearance', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'kotonoha-plamo-settings-'));
+  const file = path.join(dir, 'legacy.json');
+  for (const pair of [{ source: 'pt', target: 'en' }, { source: 'ja', target: 'pt' }]) {
+    const original = JSON.stringify({ ...defaultSettings, ...pair, fontSize: 48, showOriginal: true, uiLanguage: 'en' });
+    writeFileSync(file, original);
+    const saved = loadSettings(file);
+    assert.equal(saved.fontSize, 48);
+    assert.equal(saved.showOriginal, true);
+    assert.equal(saved.uiLanguage, 'en');
+    assert(![saved.source, saved.target].includes('pt'));
+    assert.notEqual(saved.source, saved.target);
+    assert.equal(readFileSync(file, 'utf8'), original);
+  }
+  assert.throws(() => validatedSettings({ ...defaultSettings, target: 'pt' }));
+});
 test('commit intervals persist and invalid values are rejected without replacing saved preferences', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'kotonoha-interval-'));
   const file = path.join(dir, 'settings.json');

@@ -1,9 +1,21 @@
 """Prepare shared model caches explicitly, never during capture."""
 
 import argparse
+import hashlib
 import subprocess
+from pathlib import Path
 
-from backend.config import ASR_DIR, ASR_MODEL, MODEL_DIR, MODEL_ID, MODEL_REVISION, nemo_binary
+from backend.config import (
+    ASR_DIR,
+    ASR_MODEL,
+    MODEL_FILENAME,
+    MODEL_ID,
+    MODEL_PATH,
+    MODEL_REVISION,
+    MODEL_SHA256,
+    llama_binary,
+    nemo_binary,
+)
 
 
 def main():
@@ -16,15 +28,19 @@ def main():
         raise SystemExit(
             "nemo-speech が見つかりません。NeMo-Speech.cpp の arm64 CLI を導入してください。"
         )
-    from huggingface_hub import snapshot_download
+    if not llama_binary():
+        raise SystemExit("llama-server がありません。llama.cpp 1.0.0 以降を導入してください。")
+    from huggingface_hub import hf_hub_download
 
-    print(f"Downloading {MODEL_ID} → {MODEL_DIR}", flush=True)
-    # Exclude training/source artifacts; all model and tokenizer files remain available offline.
-    snapshot_download(
+    print(f"Downloading {MODEL_ID} → {MODEL_PATH}", flush=True)
+    downloaded = hf_hub_download(
         MODEL_ID,
+        filename=MODEL_FILENAME,
         revision=MODEL_REVISION,
-        allow_patterns=["*.json", "*.jinja", "*.model", "*.safetensors", "README.md"],
     )
+    with Path(downloaded).open("rb") as model:
+        if hashlib.file_digest(model, "sha256").hexdigest() != MODEL_SHA256:
+            raise SystemExit("翻訳モデルの SHA-256 が一致しません。")
     print(f"Downloading Nemotron 3.5 → {ASR_DIR}", flush=True)
     subprocess.run(
         [binary, "pull", ASR_MODEL],
