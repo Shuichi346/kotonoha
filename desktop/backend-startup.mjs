@@ -23,7 +23,7 @@ export function backendPort(child, requestedPort, labels, failure, timeoutMs = 3
         let report;
         try { report = JSON.parse(line); } catch { continue; }
         if (report.type === 'ports_unavailable') {
-          finish(new Error(labels().portBusy.replace('{ports}', allowed.join(', '))));
+          finish(Object.assign(new Error(labels().portBusy.replace('{ports}', allowed.join(', '))), { code: 'PORTS_UNAVAILABLE' }));
           return;
         }
         if (report.type === 'service_port') {

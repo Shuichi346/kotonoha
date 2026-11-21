@@ -10,6 +10,7 @@ import { windowAvailable, showController, releaseOverlay, setOverlayInput, showS
 import { createCaptureActions } from './capture-actions.mjs';
 import { startupWindowLayout } from './window-layout.mjs';
 import { backendPort } from './backend-startup.mjs';
+import { runtimeFailure, backendFailure } from './runtime-health.mjs';
 
 app.setName('kotonoha');
 if (process.env.KOTONOHA_TEST_PROFILE) app.setPath('userData', process.env.KOTONOHA_TEST_PROFILE);
@@ -115,9 +116,20 @@ async function waitForBackend() {
   throw new Error(backendError || text().pythonStartup);
 }
 const ready = { promise: null };
-const captureActions = createCaptureActions({
-  requestPermission: async () => {
+async function withBackend(action) {
+  const missing = runtimeFailure(root, text());
+  if (missing) return missing;
+  try {
     await ready.promise;
+    return await action();
+  } catch (error) {
+    const failure = backendFailure(text());
+    if (['PORTS_UNAVAILABLE', 'PORT_IN_USE'].includes(error.code)) failure.error.message = error.message;
+    return failure;
+  }
+}
+const captureActions = createCaptureActions({
+  requestPermission: () => withBackend(async () => {
     // Active capture already has access; a second permission request must not interrupt it.
     const active = state !== 'stopped';
     const response = await fetch(`${base}${active ? '/api/status' : '/api/capture/permission'}`, {
@@ -128,7 +140,7 @@ const captureActions = createCaptureActions({
     if (!response.ok) throw new Error(`${text().readiness} (${response.status})`);
     const result = await response.json();
     return active ? result.capture : result;
-  },
+  }),
   start: async () => {
     if (quitting || state !== 'stopped') return;
     await connect();
@@ -196,12 +208,11 @@ else {
     globalShortcut.register('Command+Shift+K', openController);
     globalShortcut.register('Command+Shift+L', () => setLocked(!locked));
     handle('app:snapshot', () => ({ settings, state, latest, history, visible: windowAvailable(overlay, quitting) && overlay.isVisible(), locked }));
-    handle('app:status', async () => {
-      await ready.promise;
+    handle('app:status', () => withBackend(async () => {
       const response = await fetch(`${base}/api/status`, { headers: { Authorization: `Bearer ${token}`, 'Accept-Language': settings.uiLanguage }, signal: AbortSignal.timeout(10000) });
       if (!response.ok) throw new Error(`${text().readiness} (${response.status})`);
       return response.json();
-    });
+    }));
     handle('app:settings', (value) => {
       try { settings = validatedSettings(value); } catch (error) { throw new Error(text()[error.code] || error.message); }
       writeFileSync(preferencesPath, JSON.stringify(settings));
@@ -226,7 +237,8 @@ else {
       return !result.canceled;
     });
     const python = path.join(root, '.venv/bin/python');
-    if (existsSync(python)) {
+    const missing = runtimeFailure(root, text());
+    if (!missing) {
       backend = spawn(python, ['-m', 'backend.app'], { cwd: root, env: { ...process.env, PYTHONHOME: undefined, PYTHONPATH: undefined, PYTHONNOUSERSITE: '1', RT_TOKEN: token, PYTHONUNBUFFERED: '1', RT_ROOT: root, RT_PORT: String(port) }, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
       backend.stderr.on('data', (data) => { backendError = (backendError + data.toString()).slice(-3000); });
       backend.on('error', (error) => { backendError = error.message; statusEvent({ type: 'error', message: text().missingPython }); });
@@ -236,8 +248,13 @@ else {
         base = `http://127.0.0.1:${port}`;
         await waitForBackend();
       });
-    } else ready.promise = Promise.reject(new Error(text().missingPython));
-    ready.promise.catch((error) => { backendError = error.message; statusEvent({ type: 'error', message: error.message }); });
+    } else ready.promise = Promise.reject(new Error(missing.error.message));
+    ready.promise.catch((error) => {
+      backendError = error.message;
+      const failure = runtimeFailure(root, text()) || backendFailure(text());
+      if (['PORTS_UNAVAILABLE', 'PORT_IN_USE'].includes(error.code)) failure.error.message = error.message;
+      statusEvent({ type: 'error', code: failure.error.code, message: failure.error.message });
+    });
     await controller.loadFile(path.join(here, '../dist/index.html'));
     await overlay.loadFile(path.join(here, '../dist/index.html'), { query: { view: 'subtitles' } });
     if (!backendError && state === 'stopped' && showStartupOverlay(overlay, { hidden: process.env.KOTONOHA_TEST_HIDDEN === '1', quitting })) {

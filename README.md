@@ -112,6 +112,8 @@ The app also needs its local runtime directory:
 
 Keep this directory, the installed Python/NeMo/llama.cpp tools, and the [model caches](#shared-model-caches) on the same Mac after moving the `.app`.
 
+If using AppCleaner to remove an earlier installation, do so **before building**. It can remove the runtime shared by old and newly built copies of kotonoha. After AppCleaner or `git clean -fdX`, rerun `./scripts/build-app.sh` before installing and opening the result. To reset only preferences, quit kotonoha and remove only `~/Library/Application Support/kotonoha/settings.json`; keep `runtime/`.
+
 ### Install and launch
 
 After the script succeeds, move the generated `kotonoha.app` to `/Applications` on the same Mac. Quit any running kotonoha build, then open the new app in Finder. If replacing an app already in `/Applications`, keep the previous copy until the new build is confirmed working.
@@ -164,6 +166,7 @@ The finalization interval offers **5, 10, 15, 20, or 30 seconds**, defaults to *
 | Symptom | What to check |
 | --- | --- |
 | Audio access is required | Use the app's guide. In **System Settings → Privacy & Security → Screen & System Audio Recording**, enable the relevant entry; macOS may show **kotonoha** or **LiveCaption Audio**. Return to the app and check access again. Restart kotonoha if macOS requires it. |
+| Audio access cannot be checked or no permission prompt appears | Open the permission guide and choose **Continue to permission** or **Open System Settings**. Checking access alone does not request permission. If the local runtime directory is missing, rebuild with `./scripts/build-app.sh`, install the resulting app, and restart it. |
 | A model shows **Setup needed** | Run `npm run prepare:models`; confirm the arm64 `nemo-speech` executable is available. |
 | Startup reports a service conflict | Each service automatically tries five backup ports. If all candidates are occupied, check running apps or projects, free one of the listed ports, then restart kotonoha (or retry Start for NeMo). |
 | Captions are missing | Confirm the audio language, video playback, and subtitle-window visibility. Some protected media cannot be captured. |

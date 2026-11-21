@@ -12,6 +12,8 @@ const ja = {
   socketError: '音声サービスに接続できません。', invalidResponse: '音声サービスから不正な応答が届きました。',
   disconnected: '音声サービスとの接続が切れました。翻訳を再開してください。', readiness: '準備状況を取得できません',
   pythonStopped: 'Pythonサービスが終了しました。アプリを再起動してください。', missingPython: 'Python環境がありません。プロジェクトで uv sync を実行してください。',
+  runtimeMissing: 'アプリの実行環境が見つかりません。関連ファイルの削除で失われた可能性があります。アプリを再ビルドして入れ替えてください。音声の許可要求はまだ送信できません。',
+  backendUnavailable: '音声サービスを起動または接続できません。kotonohaを終了して開き直してください。音声の許可要求はまだ送信できません。',
 };
 const en = {
   subtitleTitle: 'kotonoha — Subtitles', tagline: 'kotonoha — Live subtitle translation',
@@ -27,5 +29,7 @@ const en = {
   socketError: 'Unable to connect to the audio service.', invalidResponse: 'The audio service returned an invalid response.',
   disconnected: 'The audio service disconnected. Start translation again.', readiness: 'Unable to check readiness',
   pythonStopped: 'The Python service stopped. Restart the app.', missingPython: 'The Python environment is missing. Run uv sync in the project.',
+  runtimeMissing: 'The app runtime is missing. Removing related app files may have deleted it. Rebuild and replace the app. The audio permission request cannot be sent yet.',
+  backendUnavailable: 'The audio service could not start or connect. Quit and reopen kotonoha. The audio permission request cannot be sent yet.',
 };
 export function desktopLabels(language) { return language === 'en' ? en : ja; }

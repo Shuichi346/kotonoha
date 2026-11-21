@@ -1,5 +1,19 @@
 # Notes
 
+## Clean-source installation and service-failure classification — 2026-11-21
+
+The user clarified that AppCleaner plus `git clean -fdX` was intended to simulate a new clone. The installed replacement app referenced a missing snapshot after cleanup: all app copies share Application Support/runtime. The exact installed `0ddd38b2a1fff9b6` snapshot was restored without changing the installed app. Normal app launch then owned its Python backend again, and the user supplied the actual macOS Screen Recording prompt, confirming OS-request delivery. Approval and real recording remain user operations.
+
+Known service errors must return a plain serializable `{error:{code,message}}` from status/permission IPC. Missing Python/base interpreter, backend, config, or capture executables returns `runtime_missing`; rejected startup/connection returns `backend_unavailable`. This avoids losing startup events before renderer subscription and avoids pretending a request reached macOS. Preserve localized port-exhaustion details within backend failures. Keep native permission `unknown` separate, with the existing explicit guide recovery. Unit/UI and real Electron IPC coverage verify these distinctions; PLANS.md holds acceptance evidence.
+
+README cleanup ordering is operationally necessary: AppCleaner first, then rebuild, then install. A settings-only reset removes only settings.json while the app is closed. `git clean -fdX` removes checkout dependencies, helpers, and build outputs; the committed builder recreates them. Clean-source validation includes current working-tree fixes and is not a claim that those fixes have been committed/published or that a fresh Mac's prerequisite installations were tested.
+
+## Permission-check recovery and missing runtime — 2026-11-21
+
+The installed `/Applications/kotonoha.app/Contents/Resources/runtime.json` pointed to absent runtime `ae683584f762a644`. The current backend/venv/native fingerprint matched exactly, so `node scripts/stage-runtime.mjs` restored that snapshot in Application Support without rewriting the installed bundle. Its disappearance is unexplained. Hidden startup of the installed app then passed with both models ready, capture permission `required`, authenticated IPC, and no renderer errors. The native nonprompting helper also returned valid `required` JSON; no native request-API defect was established.
+
+`useLive.check(true)` previously opened setup only for `required`; unknown/rejected checks left only the nonprompting check button available. Keep capture readiness separate from model status, invalidate it on check rejection, and show the setup guide whenever access is unconfirmed. A successful explicit permission result must render even if the initial full status failed. The guide never starts translation and both request/settings actions stay available after errors. Regression coverage is in `tests/interface.spec.mjs`; completed validation and artifact details are tracked in PLANS.md. OS prompt appearance, actual approval, and system capture remain untested interactive operations.
+
 ## Root README audience — 2026-11-21
 
 Repeated implementation updates had mixed migration guarantees and maintenance evidence into the introduction/setup/usage path. English and Japanese root READMEs now describe the current product and a single source-build workflow. Portuguese preference migration, legacy kotoba profile handling, obsolete workspace-model layouts, snapshot selection, and detailed smoke/port mechanics belong in existing implementation documentation and acceptance records. Their removal from the root READMEs does not change those application contracts.

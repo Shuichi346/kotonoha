@@ -119,8 +119,37 @@ This is the single authoritative implementation and acceptance checklist. The or
 - [x] REV1 — Verify language parity, local links/images/anchors, and documented commands against source without rebuilding.
 - [x] RED1 — Record the editorial boundary and completed documentation checks.
 
-Current: Complete — English/Japanese root READMEs describe current setup and usage; migration/maintenance narratives remain in the appropriate development records. Prior dependency maintenance and its separate app remain verified.
-Next: No implementation or build action is required for this documentation-only correction.
+- [x] PR1 — Restore the installed app's missing runtime snapshot and retain explicit setup access after unknown/failed permission checks.
+- [x] PRV1 — Verify localized recovery, stale-authorization invalidation, frontend build, desktop regressions, and packaged startup without recording or prompting.
+- [x] PRP1 — Package the UI correction separately and record the exact runtime/artifact and OS-interaction limits.
+
+- [x] SR1 — Diagnose the repeated missing runtime after user-confirmed AppCleaner cleanup and restore the installed app's exact snapshot.
+- [x] SR2 — Distinguish missing runtime/service failures from native permission status across main IPC and localized recovery UI.
+- [x] SRV1 — Verify missing/incomplete runtime, localized service recovery, restored installed app, and separate correction package without capture.
+- [x] CLV1 — Build and smoke the current source in an isolated directory containing no generated dependencies/helpers/builds, following the README builder workflow.
+
+Current: Installed runtime restored; service errors distinguished from permission setup; clean-source build and final relocated artifact startup passed.
+Next: The user completes macOS approval and explicit translation Start. File changes remain uncommitted/unpublished; commits/pushes remain user operations.
+
+## AppCleaner Runtime Recovery — 2026-11-21
+
+The user confirmed deleting related files with AppCleaner and running `git clean -fdX` to simulate a new clone. The currently installed app selects snapshot `0ddd38b2a1fff9b6`; Application Support/runtime was absent again, and process inspection showed no Python backend child. Current generated dependencies had already been rebuilt, and standard staging restored exactly the installed snapshot. Do not misattribute this condition to native authorization. Structured `runtime_missing`/`backend_unavailable` IPC results must survive startup before renderer subscription, block Start, close the permission guide, and show localized recovery guidance. Preserve the earlier guide behavior for actual native `required`/`unknown` results and unexpected transport rejection.
+
+SRV1 evidence: frontend build and all 27 UI checks passed, including Japanese/English service failures, unavailable request handling, retry after runtime recovery, and the earlier native-permission recovery cases. All 34 Node desktop/build/runtime tests passed; the affected 27 desktop/runtime checks also passed after preserving the port-exhaustion error code/details. A temporary app containing the actual desktop/renderer modules but no runtime passed real Electron IPC checks: both status and explicit permission IPC returned `runtime_missing`, the guide was hidden, Start was disabled, and no backend/helper was started. Screenshot: `/private/tmp/kotonoha-missing-runtime-ipc.png`. The restored installed app was opened normally and owned its Python backend again. The user's subsequent macOS Screen Recording prompt screenshot confirms real OS-request delivery; OS approval and live capture were not performed by the agent.
+
+CLV1 evidence: copied 80 current source files (tracked working-tree files plus the two new runtime-health module/test files) into `/private/tmp/kotonoha-clean-source-ClyOXX`, with no node_modules/.venv/native/bin/dist/release. Ran the README's `./scripts/build-app.sh` successfully: prerequisite probes, locked npm/uv setup, explicit model preparation, native compilation, frontend build, packaging, and architecture check. Existing system tools and shared dependency/model caches were used; this does not claim prerequisite installation or uncached first model downloads on a fresh Mac, nor validation of the currently published Git commit.
+
+Final clean-built artifact: `release/clean-install-verified-20261121/kotonoha-darwin-arm64/kotonoha.app`, selecting staged runtime `b78f77667a2ee7d9`. Desktop archive bytes match final source; 33 bundled components and Python/NeMo/llama.cpp support arm64. Relocated hidden smoke passed with both models ready, native permission `required`, authenticated backend, two safe windows, correct app/Electron versions, and zero renderer errors. The first QA copy used Node cpSync without verbatimSymlinks, rewriting Framework symlinks and causing an ICU-data startup failure; the original builder artifact was intact. A new copy preserved relative symlinks. An orphaned backend from that crashed QA copy occupied test port 8767 and caused the next smoke timeout; only that owned test process group was terminated, then the final smoke passed. Incorrect QA copies were retained and are not delivery artifacts. No capture or automated OS prompt, deletion of existing apps/caches, or Git commit/push/merge was performed.
+
+## Failed Permission Check Recovery — 2026-11-21
+
+The installed `/Applications/kotonoha.app` references runtime `ae683584f762a644`, which was absent during diagnosis. The current source fingerprint matches that revision; normal runtime staging restored it without modifying the installed app. The native nonprompting check returned `required`, not an error. The screenshot's unconfirmed model state is consistent with the missing backend, while the exact deletion cause is unknown.
+
+Unknown capture status and rejected status IPC must both lead to the setup guide and keep explicit request/settings actions available. Failed checks invalidate previous capture readiness. Requests remain user actions; neither setup nor verification may start capture/models. Automated coverage uses the mocked bridge; OS prompt appearance and actual user approval remain interactive verification limits.
+
+Verification: final `npm run build`, all 22 scripted UI checks, and all 23 Node desktop/build-orchestration regressions passed. The initial UI run lacked the Playwright 1.65.1 browser; the matching Chromium was installed. The next run exposed two Japanese-only title expectations in the new English tests; corrected localized expectations passed on the final run. No dependency lockfiles changed. Browser plugin was not available, so the existing project Playwright workflow verified `http://127.0.0.1:5173/`: correct localized identity, meaningful rendered content, no framework overlay, clean application console, screenshot evidence, and settings/request interaction proof. New recovery screenshots cover 480×640 in both languages; the existing compact regression also passed at 420×500. Screenshots remain in `/private/tmp/kotonoha-access-recovery-*.png`.
+
+The separate artifact is `release/permission-recovery-20261121/kotonoha-darwin-arm64/kotonoha.app`; archived frontend bytes match the final build and runtime.json selects the restored snapshot. Architecture verification passed for 33 bundled executables/libraries plus Python/NeMo/llama.cpp. Hidden smoke passed for both the installed app and final correction: Electron 45.4.1/application 0.2.0, authenticated backend, both models ready, capture `required`, two safe windows, and zero renderer errors. The first restricted smoke could not launch Electron; the permitted run passed. Backend/native/model code was unchanged. No capture, OS permission prompt, privacy-setting change, app replacement, or Git commit/push/merge was performed.
 
 ## Root README editorial correction — 2026-11-21
 

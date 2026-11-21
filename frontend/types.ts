@@ -3,12 +3,13 @@ export type SessionState = 'starting' | 'listening' | 'stopping' | 'stopped';
 export type Subtitle = { type: 'subtitle'; id: string; source: string; text: string; start: number; end: number; latency_ms: number; receivedAt: number };
 export type ModelStatus = { ready: boolean; detail: string; permission?: 'granted' | 'required' | 'unknown' };
 export type Readiness = { capture: ModelStatus; asr: ModelStatus; translation: ModelStatus };
+export type ServiceFailure = { error: { code: 'runtime_missing' | 'backend_unavailable'; message: string } };
 export type LiveEvent = Subtitle | { type: 'status'; state: SessionState; message?: string } | { type: 'partial'; text: string } | { type: 'level'; value: number } | { type: 'error'; message: string; code?: string } | { type: 'settings'; settings: Settings } | { type: 'overlay'; visible: boolean; locked: boolean } | { type: 'clear' };
 export type Snapshot = { settings: Settings; state: SessionState; latest: Subtitle | null; history: Subtitle[]; visible: boolean; locked: boolean };
 export interface Bridge {
   snapshot(): Promise<Snapshot>;
-  status(): Promise<Readiness>;
-  requestCapturePermission(): Promise<ModelStatus>;
+  status(): Promise<Readiness | ServiceFailure>;
+  requestCapturePermission(): Promise<ModelStatus | ServiceFailure>;
   openCaptureSettings(): Promise<void>;
   settings(value: Settings): Promise<Settings>;
   start(): Promise<void>;

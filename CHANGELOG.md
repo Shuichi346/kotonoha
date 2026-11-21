@@ -2,6 +2,13 @@
 
 ## 2026-11-21
 
+### Fixed
+
+- Restored the installed app's missing local runtime snapshot so its authenticated backend and audio-permission helper could start again.
+- Opened permission setup after unknown or failed access checks, kept explicit request/settings actions reachable, invalidated stale capture authorization, and preserved successful permission results before model status became available.
+- Distinguished missing runtime and unavailable backend failures from audio authorization across Electron IPC, including startup errors before the renderer loads; blocked translation and replaced misleading permission prompts with localized service recovery guidance.
+- Documented AppCleaner-before-build ordering and settings-only reset, and verified the current source build workflow without generated project files.
+
 ### Changed
 
 - Revised both root READMEs around current features, prerequisites, installation, and usage; removed preference-migration and obsolete runtime narratives, simplified setup explanations, and grouped custom-path configuration under Development.
