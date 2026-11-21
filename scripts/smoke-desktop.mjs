@@ -21,8 +21,10 @@ try {
     }
   }
   desktop = await electron.launch({ executablePath: path.resolve(process.env.KOTONOHA_SMOKE_APP || 'release/kotonoha-darwin-arm64/kotonoha.app/Contents/MacOS/kotonoha'), env, timeout: 15000 });
-  const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  const { version, devDependencies } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   assert.equal(await desktop.evaluate(({ app }) => app.getVersion()), version);
+  const electronVersion = await desktop.evaluate(() => process.versions.electron);
+  assert.equal(electronVersion, devDependencies.electron);
   const errors = [];
   desktop.on('window', (page) => page.on('pageerror', (error) => errors.push(error.message)));
   await desktop.firstWindow();
@@ -147,7 +149,7 @@ try {
     return { overlayVisible: windows.find((win) => win.isAlwaysOnTop()).isVisible() };
   });
   assert.equal(safety.overlayVisible, false);
-  console.log(JSON.stringify({ passed: true, fallbackPort: fallback ? 8774 : undefined, windows: windows.length, presentation, asr: result.status.asr.ready, translation: result.status.translation.ready, capture: result.status.capture, ipc: 'authenticated backend and independent overlay', rendererErrors: errors.length }));
+  console.log(JSON.stringify({ passed: true, electronVersion, fallbackPort: fallback ? 8774 : undefined, windows: windows.length, presentation, asr: result.status.asr.ready, translation: result.status.translation.ready, capture: result.status.capture, ipc: 'authenticated backend and independent overlay', rendererErrors: errors.length }));
 } finally {
   await desktop?.close();
   await Promise.all(occupied.map((server) => new Promise((resolve) => server.close(resolve))));

@@ -109,8 +109,42 @@ This is the single authoritative implementation and acceptance checklist. The or
 - [x] VRV1 — Verify lockfiles, build a separate app, and check macOS bundle/runtime version plus hidden startup.
 - [x] VRD1 — Record the version rationale and final artifact.
 
-Current: Complete — version 0.2.0 is packaged and verified; the PLaMo model migration remains intact.
-Next: User quits the prior app and opens the new 0.2.0 build.
+- [x] DU1 — Audit exact npm pins, Python constraints/locks, and installed native runtimes against official stable releases.
+- [x] DU2 — Update compatible stable dependencies and lockfiles while retaining reproducible installation and model pins.
+- [x] DUV1 — Pass frontend/UI, desktop, backend, lint/format, and native verification without capture.
+- [x] DUP1 — Package a separate arm64 app and verify the actual updated Electron/backend runtime and hidden startup.
+- [x] DUD1 — Record versions, compatibility rationale, sources, and final evidence.
+
+- [x] RE1 — Review both root READMEs and separate current setup/usage guidance from migration history and internal maintenance details.
+- [x] REV1 — Verify language parity, local links/images/anchors, and documented commands against source without rebuilding.
+- [x] RED1 — Record the editorial boundary and completed documentation checks.
+
+Current: Complete — English/Japanese root READMEs describe current setup and usage; migration/maintenance narratives remain in the appropriate development records. Prior dependency maintenance and its separate app remain verified.
+Next: No implementation or build action is required for this documentation-only correction.
+
+## Root README editorial correction — 2026-11-21
+
+RE1: removed saved-Portuguese-language migration, legacy kotoba profile handling, obsolete workspace-model retention, runtime snapshot-selection mechanics, stale tested-version annotations, and detailed smoke/port test narration from both root READMEs. Preserved the eight current languages, tool requirements, single-command build/install path, required local runtime/engines/model caches, explicit model preparation, permissions, subtitle controls and export limits. Consolidated optional environment variables in Development, linked component docs for internals, and clarified the required macOS 26+ SDK against the actual builder. Both languages now follow the same paragraph/section order.
+
+REV1: reviewed the documentation diff against package.json, scripts/build-app.sh, backend/config.py, component documentation and the existing smoke contract. All 21 local links/images/anchors per README resolve; Markdown fences balance; all six shell-command blocks and the three image paths match between languages; heading counts match. A separate read-only editorial review found no actionable parity or reader-facing issue. Whitespace validation passed. External installer/model URLs and screenshots were retained, not fetched or revalidated. No application source, dependency, asset or build artifact was changed by this correction, and no app build or implementation test was rerun.
+
+RED1: appended the same-day CHANGELOG entry, recorded the audience/rationale in NOTES, and added a concise bilingual README scope rule to AGENTS. Existing dependency changes and historical implementation records were preserved. No commit, push or merge occurred.
+
+## Stable dependency maintenance — 2026-11-21
+
+DU1: official npm registry and PyPI metadata were checked against all 9 direct npm pins and 32 locked third-party Python packages, excluding prereleases and yanked Python releases. npm candidates: Playwright 1.65.1, Electron 45.4.1, Vite 8.3.8; other direct pins already match stable latest. Python candidates include FastAPI 0.165.0, huggingface-hub 2.4.0, websockets 17.4, pytest 9.2.0, pytest-asyncio 1.5.0, Ruff 0.17.6 and compatible transitive updates. Installed NeMo 0.3.0 and llama.cpp 1.0.0 already match their official latest non-prerelease releases. Keep the selected model revision unchanged.
+
+Compatibility review: Electron 45 removes Node polyfills from sandboxed preloads; this app only imports Electron IPC there. websockets 17 requires Python 3.11+ and removes obsolete aliases; this app uses explicit asyncio/sync clients on Python 3.13. Hugging Face Hub 2 uses httpx2 internally and removes deprecated upload/inference APIs; this app only uses cache constants and hf_hub_download. FastAPI changes to removed extra arguments/form parsing do not affect the app's explicit auth headers, JSON/WebSocket protocol, and empty-body permission action. Verify all these paths with existing checks and actual packaged startup.
+
+DU2: updated all 9 outdated direct dependencies (3 npm and 6 Python) to the audited latest stable versions; refreshed compatible transitive resolutions. npm exact pins and both committed lockfiles remain authoritative. Hub/websockets upper bounds now permit the validated majors; pytest-asyncio 1.5+ uses explicit `fixture-scope` to preserve prior fixture-loop lifetime. Other direct libraries and installed native engines were already latest stable. No model/app-version change was required. npm outdated reports no direct updates, npm audit reports zero vulnerabilities, offline uv lock validation and installed-package compatibility checks pass.
+
+DUV1: passed 126 backend tests, Ruff lint/format (16 files), 23 Node desktop/build tests, frontend type/build and all 16 UI tests on Playwright 1.65.1's Chromium 159. Native build/PCM self-test/preflight and helper signing passed with Swift 6.4.2 targeting arm64 macOS 26. Initial UI execution lacked the new browser; after installation, the restricted environment blocked Chromium's Mach-port setup. The final finite scripted run outside that restriction passed in 11.2 seconds. npm/uv/Electron cache writes initially hit protected global locations; task-local ignored caches resolved that without changing global ownership. No production-code migration or new test suite was needed.
+
+DUP1: produced `release/build-dependencies-20261121/kotonoha-darwin-arm64/kotonoha.app`, selecting Application Support runtime `47812cf5591b3dbf`. Architecture checks passed for 33 bundled Mach-O components plus Python/NeMo/llama.cpp. Archived desktop/config/backend bytes and React dependency pins match source. Hidden startup passed on isolated 8767 and fallback 8774, reporting actual Electron 45.4.1, application version 0.2.0, both models ready, two windows, authenticated IPC and zero renderer errors; Start was intercepted. The smoke now asserts `process.versions.electron` against the exact package pin. Running the staged Python from /private/tmp verified actual FastAPI 0.165.0, Hub 2.4.0, websockets 17.4, Pydantic 2.14.4 and Starlette 1.10.0. Its offline Hub cache lookup, real NeMo authenticated `session.created`/401 without credentials, English→Japanese and Japanese→English synthetic text translations, persistent translator reuse and child/socket cleanup all passed without capture. The native preflight reports recording permission required; it did not request it.
+
+The local packager's inherited Electron signature initially failed deep/strict resource validation after bundle rewriting. Re-signed only the new artifact ad hoc, preserving entitlements; deep/strict signature validation and final hidden startup then passed. The packager's signing policy is unchanged; this is a locally signed, unnotarized development build. The optional .icon-format warning is nonfatal. Existing apps and runtime snapshots were not replaced.
+
+DUD1: NOTES records the full direct-dependency table, official sources, upper-bound/migration rationale and local signing limitation; CHANGELOG records the completed upgrades; AGENTS retains the new actual-Electron-version smoke contract. A bounded independent review found no actionable dependency/lock/smoke issue. Documentation and whitespace were reviewed. No commit, push, merge, real system-audio capture or permission request occurred. Audio playback quality remains unmeasured.
 
 ## Application version 0.2.0 — 2026-11-21
 

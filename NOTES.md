@@ -1,5 +1,43 @@
 # Notes
 
+## Root README audience — 2026-11-21
+
+Repeated implementation updates had mixed migration guarantees and maintenance evidence into the introduction/setup/usage path. English and Japanese root READMEs now describe the current product and a single source-build workflow. Portuguese preference migration, legacy kotoba profile handling, obsolete workspace-model layouts, snapshot selection, and detailed smoke/port mechanics belong in existing implementation documentation and acceptance records. Their removal from the root READMEs does not change those application contracts.
+
+Retain operational facts readers need: Apple silicon/macOS/tool prerequisites, same-Mac installation, the required Application Support runtime and installed engines, model-cache locations/recovery, permissions, supported languages, settings, shortcuts, and export limits. Keep developer commands and optional custom paths concise; link backend/native documentation for protocol details. Language/heading/link/image parity and command consistency were checked against source. This documentation-only correction required no app build or implementation-test rerun; acceptance is recorded in PLANS.md.
+
+## Stable dependency maintenance — 2026-11-21
+
+All 9 direct npm dependencies use exact versions in package.json; package-lock.json also pins the transitive graph. Python uses bounded requirements in pyproject.toml and exact resolved versions in uv.lock. Retain these reproducibility mechanisms after upgrades. The PLaMo revision is a separate model contract, not an outdated library pin, and remains unchanged.
+
+Direct dependency audit (official stable releases, excluding prerelease/yanked candidates):
+
+| Dependency | Before | Selected stable |
+| --- | --- | --- |
+| react / react-dom | 19.3.1 | 19.3.1 |
+| @types/react / @types/react-dom | 19.3.0 | 19.3.0 |
+| @electron/packager | 20.3.0 | 20.3.0 |
+| TypeScript | 7.0.2 | 7.0.2 |
+| Electron | 44.7.2 | 45.4.1 |
+| @playwright/test | 1.64.1 | 1.65.1 |
+| Vite | 8.3.4 | 8.3.8 |
+| FastAPI | 0.143.2 | 0.165.0 |
+| Uvicorn | 0.54.0 | 0.54.0 |
+| httpx | 0.28.1 | 0.28.1 |
+| huggingface-hub | 1.33.0 | 2.4.0 |
+| websockets | 16.1.1 | 17.4 |
+| pytest | 9.1.1 | 9.2.0 |
+| pytest-asyncio | 1.4.0 | 1.5.0 |
+| Ruff | 0.17.1 | 0.17.6 |
+
+All 32 previously locked third-party Python packages were compared with PyPI stable metadata. Eighteen were upgraded and four new transitive lock entries were added by Hub 2's httpx2 transport (httpcore2, httpx2, browser-only httpx2-jsfetch, truststore). Existing httpx remains required by the app and its Unix-socket translator. Broadened only the Hub/websockets major upper bounds and raised their minimums to the validated releases. pytest-asyncio's explicit `fixture-scope` setting preserves the previous default instead of silently adopting a future loop-lifetime change; it requires pytest-asyncio 1.5+. The existing app uses none of the removed Electron preload shims, Hub upload APIs, or websockets module aliases. FastAPI's form/default changes do not alter this app's header authentication, JSON/WebSocket messages, or body-free permission endpoint.
+
+Compatible npm transitive updates included ASAR/glob/minimatch; npm audit now reports zero vulnerabilities. Upstream constraints such as Vite's Rolldown pin and Electron's Node type major were respected rather than overridden. Installed NeMo 0.3.0 and llama.cpp 1.0.0 already match their latest stable releases; newer llama.cpp build-number releases marked prerelease were excluded. Python 3.13, Node.js 26.13.1 and npm 12.2.3 were retained.
+
+Sources checked: [npm registry](https://registry.npmjs.org/), [PyPI JSON API](https://docs.pypi.org/api/json/), [Electron 45 breaking changes](https://www.electronjs.org/docs/latest/breaking-changes#breaking-api-changes-450), [Playwright 1.65](https://playwright.dev/docs/release-notes#version-165), [FastAPI release notes](https://fastapi.tiangolo.com/release-notes/), [Hub 2 migration](https://huggingface.co/docs/huggingface_hub/concepts/migration_v2), [websockets changelog](https://websockets.readthedocs.io/en/stable/project/changelog.html), [pytest-asyncio configuration](https://pytest-asyncio.readthedocs.io/en/stable/reference/configuration.html), [NeMo 0.3.0](https://github.com/NVIDIA/NeMo-Speech.cpp/releases/tag/v0.3.0), [llama.cpp 1.0.0](https://github.com/ggml-org/llama.cpp/releases/tag/v1.0.0).
+
+Fresh source and staged-runtime verification passed; acceptance and artifact identifiers are recorded in PLANS.md. Restricted Chromium failed macOS Mach-port initialization, so finite scripted UI checks ran outside that restriction with a new task-local Playwright browser. npm/uv/Electron caches also used ignored .scratch paths to avoid protected global cache writes. No browser interaction with the user's Chrome occurred. The local packager retains an invalid inherited Electron signature after bundle rewriting; the new app alone was re-signed ad hoc with existing entitlements preserved, then passed deep/strict verification. This does not add a Developer ID signature or notarization, and does not change the packaging script's signing policy. Existing apps, model pins, caches and runtime snapshots were preserved; no recording or permission request was performed.
+
 ## Application version source — 2026-11-21
 
 Use 0.2.0 to identify the PLaMo translator release after the 0.1.0 baseline. `scripts/package.mjs` reads `package.json` for both `appVersion` and `buildVersion`, so macOS bundle metadata and Electron's About version agree. Keep the root npm lock metadata and Python project/uv virtual-package version aligned when bumping the app. `scripts/smoke-desktop.mjs` checks the actual packaged `app.getVersion()` against the current package version. The capture helper retains its independently versioned metadata and permission identity; this release changes the parent application's version. Acceptance and output identifiers are in PLANS.md.

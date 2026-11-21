@@ -32,7 +32,7 @@ The compact controller and subtitle window are independent. The light-gray guide
 - **Subtitles over your existing apps.** Move and resize the floating subtitle window, then lock it so clicks pass through to the app below.
 - **Local speech and translation.** Nemotron 3.5 transcribes through NeMo-Speech.cpp with Metal; PLaMo 3 Translate 0.8B, quantized to GGUF Q8_0, translates through llama.cpp with Metal.
 - **Eight selectable languages.** English, Japanese, German, French, Spanish, Italian, Chinese (Simplified), and Korean are available for both audio and subtitles.
-- **Adjustable display.** Set text size, original-text visibility, background opacity, and caption expiry. New preferences use 30 px text with original text off.
+- **Adjustable display.** Set text size, original-text visibility, background opacity, and caption expiry.
 - **Japanese and English controls.** Change the interface language independently of the audio/subtitle language pair.
 - **Session history and export.** Review the latest 1,000 caption entries and explicitly export TXT or SRT. History stays in memory and is cleared when the app quits.
 
@@ -52,7 +52,7 @@ These screenshots show the app in use; they are examples, not accuracy or latenc
 
 ## Setup
 
-Each user **clones this repository and builds on their own Mac**. The packaged `.app` uses that user's installed Python/NeMo, shared model caches, and locally staged runtime; copying another user's `.app` alone is not supported. This is not a standalone signed and notarized installer.
+**Clone this repository and build on the Mac where you will use the app.** The app requires locally installed tools and model files; the `.app` alone is not a standalone installer.
 
 ### Requirements
 
@@ -62,8 +62,8 @@ Each user **clones this repository and builds on their own Mac**. The packaged `
 | Desktop session | Logged-in graphical session with an available display |
 | Node.js / npm | Node.js 26.5+ and npm 12.0.1+ |
 | Python | Python 3.13, managed with `uv` |
-| Native toolchain | Xcode command-line tools with a macOS SDK |
-| Speech runtime | arm64 `nemo-speech` CLI with Metal support; verified with 0.2.0 |
+| Native toolchain | Xcode command-line tools with a macOS 26+ SDK |
+| Speech runtime | arm64 `nemo-speech` CLI with Metal support |
 | Translation runtime | arm64 `llama-server` from llama.cpp 1.0.0 or later with Metal support |
 | Model preparation | Internet access to download the speech and translation models |
 
@@ -82,9 +82,7 @@ Install the Metal-enabled arm64 CLI using the [official NeMo-Speech.cpp installe
 curl -fsSL https://github.com/NVIDIA/NeMo-Speech.cpp/raw/main/scripts/install.sh | sh
 ```
 
-The build script below checks arm64 and Metal support. NeMo 0.2.0 is the tested version. The app reuses the installed CLI, checking `PATH` and then `~/.local/bin/nemo-speech`; it does not build or bundle another copy. For a nonstandard installation, set `NEMO_SPEECH_BIN` to its absolute executable path. Source builds must also provide the model index via `NEMO_SPEECH_MODEL_INDEX` if it is not at `<resolved executable prefix>/share/nemo-speech/model-index.json`.
-
-The app also reuses the installed `llama-server` (tested with llama.cpp 1.0.0). Keep it installed after building. It checks `PATH`, then `/opt/homebrew/bin/llama-server`; a custom absolute path can be set with `KOTONOHA_LLAMA_SERVER`. Translation uses an authenticated private Unix socket, adds no TCP listener, and stops with the app.
+Keep Python, NeMo, and llama.cpp installed after building. If you use custom installation paths, see [Custom paths](#custom-paths).
 
 ### Local app packaging
 
@@ -96,46 +94,40 @@ cd kotonoha
 ./scripts/build-app.sh
 ```
 
-This single script checks the environment, installs dependencies from `package-lock.json` and `uv.lock`, prepares Electron and Python 3.13, runs `npm run prepare:models`, builds the frontend/native helper and `.app`, and verifies arm64 support. Initial setup requires an internet connection. Cached models are reused.
+The script checks prerequisites, installs the locked dependencies, downloads the models, and builds and verifies the app. Initial setup requires an internet connection; cached model files are reused.
 
-The checks run `git --version`, `xcrun swift --version`, `node --version`, `npm --version`, `uv --version`, `nemo-speech --version`, and `nemo-speech doctor`. They also validate macOS 26+, a native arm64 terminal/toolchain, a macOS 26+ SDK, Node.js 26.5+, npm 12.0.1+, and arm64/Metal support in NeMo. Missing or unsupported tools stop the script before dependency installation. Install the system tools using the instructions above; the script does not install Xcode, Node.js, uv, or NeMo for you. To check only, without installing dependencies or downloading models:
+If a prerequisite is missing or unsupported, the script stops and reports the problem. To check your environment without installing dependencies or downloading models:
 
 ```sh
 ./scripts/build-app.sh --check
 ```
 
-Each build creates `release/build-<timestamp>-<process-id>/kotonoha-darwin-arm64/kotonoha.app` and prints its full path. Previous app builds are preserved. The script does not launch the app or request recording access. After dependencies and models are prepared, `npm run package` remains available as the lower-level build command, using `release/kotonoha-darwin-arm64/kotonoha.app` by default; run `npm run check:architecture` afterward.
+The script prints the generated app's full path under `release/build-<timestamp>-<process-id>/kotonoha-darwin-arm64/kotonoha.app`. It does not launch the app or request audio access.
 
-Packaging stages the Python environment, backend, and native capture helper into versioned snapshots under:
+The app also needs its local runtime directory:
 
 ```text
 ~/Library/Application Support/kotonoha/runtime/
 ```
 
-`Contents/Resources/runtime.json` inside the app selects its snapshot. Packaged startup does not read dependencies from the source checkout. Keep the selected snapshot, installed base Python, NeMo executable and model index, and shared model caches available on this Mac, even after moving the `.app`. Repackage after changing backend code, Python dependencies, or the native helper. A changed translator revision also needs model preparation and repackaging. New snapshots contain no model weights; older snapshots and model folders remain untouched. Other users follow the clone/setup/build steps on their own Macs.
+Keep this directory, the installed Python/NeMo/llama.cpp tools, and the [model caches](#shared-model-caches) on the same Mac after moving the `.app`.
 
 ### Install and launch
 
 After the script succeeds, move the generated `kotonoha.app` to `/Applications` on the same Mac. Quit any running kotonoha build, then open the new app in Finder. If replacing an app already in `/Applications`, keep the previous copy until the new build is confirmed working.
 
-For development, run `npm start` from the checkout after the script has prepared dependencies and models. It checks frontend types, builds the interface, and launches Electron.
-
 ### Shared model caches
 
-`npm run prepare:models` prepares the shared caches below, reusing files already present. No manual model-path selection is needed. The two active models total approximately 1.5 GiB; allow additional space for dependencies and app builds. Refer to each model card for its terms.
+The build script downloads the models to the locations below. The two models total approximately 1.5 GiB; allow additional space for dependencies and app builds.
 
 | Model | Default shared cache |
 | --- | --- |
 | [PLaMo 3 Translate 0.8B Q8_0](https://huggingface.co/mradermacher/plamo-3-translate-0.8b-GGUF/blob/main/plamo-3-translate-0.8b.Q8_0.gguf) | `~/.cache/huggingface/hub` |
 | [Nemotron 3.5 ASR](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b), managed by NeMo | `~/Library/Caches/NeMoSpeech/models` |
 
-The translator uses the exact revision pinned in [backend/config.py](backend/config.py), not whichever revision is newest in the cache. NeMo selects `nemotron-3.5` from its installed model index. The app honors `HF_HOME` / `HF_HUB_CACHE` and `NEMO_SPEECH_MODEL_DIR` in its launch environment; use the defaults for Finder launches, which do not inherit shell configuration. Preparation and launch must use the same settings. See the [Hugging Face cache guide](https://huggingface.co/docs/huggingface_hub/guides/manage-cache) and [NeMo cache guide](https://github.com/NVIDIA/NeMo-Speech.cpp/blob/main/docs/cli.md#models-and-cache).
+Keep the cached files available. If they are missing, run `npm run prepare:models` before launching the app; normal startup does not download models. Models load on the first translation start and stay loaded between sessions. Once prepared, transcription and translation run locally.
 
-Models are not copied into the checkout or packaged runtime. Existing `models/` folders and older runtime snapshots are preserved but are not used by new builds. Keep the shared cache files available; after removing them, rerun `npm run prepare:models`. Startup/status checks do not download models or load them into memory.
-
-Preparation downloads only `plamo-3-translate-0.8b.Q8_0.gguf` from the pinned revision and verifies its SHA-256. The original model is [pfnet/plamo-3-translate-0.8b](https://huggingface.co/pfnet/plamo-3-translate-0.8b); see its model card for the PLaMo Community License. The visible language choices are English, Japanese, German, French, Spanish, Italian, Chinese (Simplified), and Korean. Portuguese is no longer offered; saved Portuguese language fields migrate to English/Japanese while preserving caption appearance.
-
-Models load when translation first starts and stay warm between sessions. Once prepared, transcription and translation use local model files.
+See each model card for its terms. The original PLaMo model is [pfnet/plamo-3-translate-0.8b](https://huggingface.co/pfnet/plamo-3-translate-0.8b), provided under the PLaMo Community License.
 
 ## Usage
 
@@ -148,7 +140,7 @@ Models load when translation first starts and stay warm between sessions. Once p
 5. Read the translated captions in the floating window. Choose **Show subtitles only** to hide the controller while you watch.
 6. Click **Stop translation** when finished. The app finishes the final utterance and pending translations before reporting that it has stopped.
 
-The subtitle window initially appears locked, with an empty-area guide. Starting a session clears and hides it until the first translated caption. When locked, clicks pass through it; unlock it to move or resize it. Stopping translation hides and resets the subtitle window.
+The subtitle window starts locked. Unlock it to move or resize it, then lock it to let clicks pass through to the app below. During translation, it appears when captions arrive and hides when you stop.
 
 ### Controls and shortcuts
 
@@ -163,9 +155,9 @@ The subtitle window initially appears locked, with an empty-area guide. Starting
 | Export captions | **History → TXT** or **SRT** |
 | Quit the app and its services | **⌘Q**, or **Quit kotonoha** in the menu bar |
 
-Closing the controller hides it while the app keeps running. Quit kotonoha to end all owned audio and model processes. Settings persist between launches; legacy kotoba preferences are imported without overwriting the old profile.
+Closing the controller hides it while the app keeps running. Use **⌘Q** to quit kotonoha completely. Your settings are saved between launches.
 
-The finalization interval offers **5, 10, 15, 20, or 30 seconds**, defaults to **15 seconds**, and applies on the next Start. It sends extra requests during continuous speech; natural speech-boundary detection remains enabled at 600 ms. This setting is not a guaranteed caption delay.
+The finalization interval offers **5, 10, 15, 20, or 30 seconds**, defaults to **15 seconds**, and applies on the next Start. It controls how often the app asks the speech engine to finalize text during continuous speech. Pauses can finalize text sooner; the interval does not specify when captions will appear.
 
 ### Permissions and troubleshooting
 
@@ -199,9 +191,23 @@ Mac system audio
 | [native/](native/) | Swift system-audio capture helper; microphone capture is disabled and video samples are not delivered or stored |
 | [scripts/](scripts/) | Build, model-runtime staging, packaging, architecture checks, and desktop smoke checks |
 
-Electron main owns the local service credentials. The Python service first tries authenticated loopback port **8765**, then **8770–8774**. NeMo first tries **8766**, then **8780–8784**. Each service automatically selects a free port from its six candidates; Electron uses the port reported by its own backend for HTTP and WebSocket traffic. If every candidate is occupied, an error lists the ports; other apps and projects are never terminated. The renderer has no Node access. Quitting terminates the backend process group and its owned services.
+Electron manages the windows and authenticated local services. Python coordinates transcription and translation. Service protocols, port configuration, model selection, and process lifecycle are documented in [backend/README.md](backend/README.md).
 
-`npm run dev:web` previews the interface in a browser. Live capture and the independent overlay require Electron.
+After the initial build, use `npm start` to build and launch the app from the checkout. `npm run dev:web` previews the interface in a browser; live capture and the independent subtitle window require Electron. Rerun `./scripts/build-app.sh` to build an app containing your changes.
+
+### Custom paths
+
+The default installation paths require no configuration. For custom installations, set these environment variables before building and launching:
+
+| Variable | Purpose |
+| --- | --- |
+| `NEMO_SPEECH_BIN` | Absolute path to the `nemo-speech` executable |
+| `NEMO_SPEECH_MODEL_INDEX` | Absolute path to the model index for a custom NeMo source build |
+| `KOTONOHA_LLAMA_SERVER` | Absolute path to `llama-server` |
+| `HF_HOME` / `HF_HUB_CACHE` | Hugging Face cache location |
+| `NEMO_SPEECH_MODEL_DIR` | NeMo model cache location |
+
+Model preparation and app launch must use the same cache settings. Finder launches do not inherit shell configuration, so use the default paths when opening the app from Finder.
 
 ### Verification commands
 
@@ -216,7 +222,7 @@ uv run --locked ruff format --check backend
 ./native/build.sh --verify
 ```
 
-Install Chromium once before running the scripted UI tests. The frontend scripts enforce finite build and test limits. Native verification checks the build, architecture, resampler, and permission status without requesting access or capturing audio.
+Install Chromium before running the UI tests, including after a Playwright update. Native verification checks the build, architecture, resampler, and permission status without requesting access or capturing audio.
 
 The builder already verifies architecture. For an optional hidden startup check, replace `/full/path/to/kotonoha.app` below with the app path printed by the builder:
 
@@ -224,6 +230,6 @@ The builder already verifies architecture. For an optional hidden startup check,
 KOTONOHA_SMOKE_APP="/full/path/to/kotonoha.app/Contents/MacOS/kotonoha" node scripts/smoke-desktop.mjs
 ```
 
-The hidden desktop smoke normally uses a temporary profile and isolated port **8767**, checks startup and IPC, and intercepts Start before capture. The optional `KOTONOHA_SMOKE_FALLBACK=1` mode occupies the first five production API candidates and verifies authenticated HTTP/WebSocket on **8774**; it preserves any existing listeners. It does not verify real audio delivery or macOS permission-dialog interaction.
+This checks the packaged app's versions, startup, and IPC with a temporary profile and hidden windows. It does not start audio capture or request permission.
 
-Protocol details and model-validation evidence are in [backend/README.md](backend/README.md); capture and permission behavior are in [native/README.md](native/README.md). [PLANS.md](PLANS.md) tracks implementation acceptance, and [NOTES.md](NOTES.md) records design rationale.
+See [native/README.md](native/README.md) for capture and permission behavior, and [CHANGELOG.md](CHANGELOG.md) for changes between versions.

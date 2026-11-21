@@ -4,6 +4,9 @@
 
 ### Changed
 
+- Revised both root READMEs around current features, prerequisites, installation, and usage; removed preference-migration and obsolete runtime narratives, simplified setup explanations, and grouped custom-path configuration under Development.
+- Updated Electron to 45.4.1, Playwright to 1.65.1, Vite to 8.3.8, FastAPI to 0.165.0, Hugging Face Hub to 2.4.0, websockets to 17.4, and Python development tools to their latest stable releases. Refreshed compatible transitive dependencies in both lockfiles, preserved exact npm pins, and made asynchronous fixture scope explicit.
+- Extended hidden packaged startup verification to check the actual Electron runtime version against its dependency pin; produced a separate arm64 local build using the updated dependency graph.
 - Raised the application/backend version to 0.2.0 for the PLaMo migration, synchronized npm/uv metadata, and derived macOS app/build versions from package.json to keep About/Finder version information aligned.
 - Replaced Hy-MT2/MLX translation with the requested pinned PLaMo 3 Translate 0.8B Q8_0 GGUF through a persistent, authenticated llama.cpp Metal worker on a private Unix socket. Added exact-file download/hash verification and the installed llama.cpp build prerequisite; removed MLX Python dependencies.
 - Updated model labels and operating documentation, limited language choices to model-supported pairs, and migrated saved Portuguese language fields while retaining caption appearance. Created a separate verified arm64 app without replacing previous builds.
