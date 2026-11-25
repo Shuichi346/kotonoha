@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-11-21
+
+### Fixed
+
+- Drained the capture helper's remaining PCM before the final ASR commit, and sized stop deadlines for the active translation plus all three waiting utterances.
+- Interrupted and reaped timed-out/cancelled translation work before permitting restart, with a shared request deadline and cleanup of the owned engine/socket.
+- Preserved staged relative Python aliases and invalidated older staging fingerprints; architecture verification now inspects the runtime selected by the app manifest.
+- Retained history rows by subtitle ID and avoided repeated timestamp formatting during partial recognition updates.
+- Batched preference writes asynchronously with atomic replacement and quit flushing; rebuilt native menus and notified the backend only when the interface language changed.
+- Restored the installed app's missing local runtime snapshot so its authenticated backend and audio-permission helper could start again.
+- Opened permission setup after unknown or failed access checks, kept explicit request/settings actions reachable, invalidated stale capture authorization, and preserved successful permission results before model status became available.
+- Distinguished missing runtime and unavailable backend failures from audio authorization across Electron IPC, including startup errors before the renderer loads; blocked translation and replaced misleading permission prompts with localized service recovery guidance.
+- Documented AppCleaner-before-build ordering and settings-only reset, and verified the current source build workflow without generated project files.
+
+### Changed
+
+- Revised both root READMEs around current features, prerequisites, installation, and usage; removed preference-migration and obsolete runtime narratives, simplified setup explanations, and grouped custom-path configuration under Development.
+- Updated Electron to 45.4.1, Playwright to 1.65.1, Vite to 8.3.8, FastAPI to 0.165.0, Hugging Face Hub to 2.4.0, websockets to 17.4, and Python development tools to their latest stable releases. Refreshed compatible transitive dependencies in both lockfiles, preserved exact npm pins, and made asynchronous fixture scope explicit.
+- Extended hidden packaged startup verification to check the actual Electron runtime version against its dependency pin; produced a separate arm64 local build using the updated dependency graph.
+- Raised the application/backend version to 0.2.0 for the PLaMo migration, synchronized npm/uv metadata, and derived macOS app/build versions from package.json to keep About/Finder version information aligned.
+- Replaced Hy-MT2/MLX translation with the requested pinned PLaMo 3 Translate 0.8B Q8_0 GGUF through a persistent, authenticated llama.cpp Metal worker on a private Unix socket. Added exact-file download/hash verification and the installed llama.cpp build prerequisite; removed MLX Python dependencies.
+- Updated model labels and operating documentation, limited language choices to model-supported pairs, and migrated saved Portuguese language fields while retaining caption appearance. Created a separate verified arm64 app without replacing previous builds.
+
 ## 2026-10-17
 
 ### Fixed

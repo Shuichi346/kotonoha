@@ -1,5 +1,85 @@
 # Notes
 
+## Review finding corrections — 2026-11-21
+
+Stopping a helper is not proof that its stdout reader has forwarded the final PCM. Keep the producer alive through helper exit and bounded EOF drain, then send the final ASR commit. The queue retains one active operation and three waiting utterances; calculate drain/stop budgets from those slots, per-operation deadlines, bounded event sends and recovery, rather than independent 60/90-second constants. A saturated queue still drops its oldest waiting utterance during capture. Preserve the yielding-send and full-queue regressions in `backend/tests/test_service.py` when changing `backend/pipeline.py`.
+
+Cancelling an asyncio executor future cannot stop synchronous HTTP work. The translator serializes operations, shields the worker future, uses one wall-clock budget across tokenize/completion requests, interrupts its owned llama-server on cancellation, and awaits worker/resource cleanup before another load. Cooperative checks also catch cancellation during late process creation. HTTP timeout recovery releases the engine/client/socket so retry loads a clean worker; successful sessions keep the engine warm. The startup budget includes the version probe plus the existing 60-second engine readiness loop. The `backend/tests/test_translation.py` regressions cover caller/internal deadlines, repeated cancellation and restart in `backend/translation.py` without loading models.
+
+Runtime staging uses verbatim relative links; otherwise Node rewrites python3/python3.13 aliases into the protected source checkout. The v4 copy-policy fingerprint deliberately creates a new snapshot instead of reusing v3 output. Keep the existing ultimate-target safety checks. Verify the selected app's runtime.json, staged helper and virtual environment, and resolve engines using that staged Python/backend rather than the checkout. The moved-checkout alias regression in `tests/desktop.test.mjs` guards `scripts/stage-runtime.mjs`; `tests/architecture.test.mjs` guards selected-runtime native-extension checks in `scripts/check-architecture.mjs`.
+
+History rows use stable subtitle IDs. Memoized history/rows and one Intl.DateTimeFormat per interface language preserve 999 surviving rows after eviction, perform no timestamp formatting for partial updates, and format only the newly added subtitle. Locale changes still reformat the displayed times. The 1000-entry regression in `tests/interface.spec.mjs` guards this behavior in `frontend/Controls.tsx`.
+
+Preference changes broadcast immediately for responsive controls, coalesce for 150 ms, and serialize asynchronous atomic replacements. IPC resolves after its batch's atomic replacement completes, returns current settings, and propagates write failures; retry remains possible. Quit flushes pending writes. Native menus and backend language notifications update only when uiLanguage changes. `tests/preferences-writer.test.mjs` covers batching, serialization, forced flush and failure/retry in `desktop/preferences.mjs`; `scripts/smoke-desktop.mjs` checks appearance changes cause zero native menu rebuilds and a language change causes one.
+
+All dependency updates from the earlier maintenance task were already applied. Registry checks found no newer direct npm or installed Python packages; lockfiles and model revisions remain unchanged. PLANS.md records the final acceptance results and artifact; real system capture/OS approval and live model cancellation remain outside automated evidence.
+
+## Clean-source installation and service-failure classification — 2026-11-21
+
+The user clarified that AppCleaner plus `git clean -fdX` was intended to simulate a new clone. The installed replacement app referenced a missing snapshot after cleanup: all app copies share Application Support/runtime. The exact installed `0ddd38b2a1fff9b6` snapshot was restored without changing the installed app. Normal app launch then owned its Python backend again, and the user supplied the actual macOS Screen Recording prompt, confirming OS-request delivery. Approval and real recording remain user operations.
+
+Known service errors must return a plain serializable `{error:{code,message}}` from status/permission IPC. Missing Python/base interpreter, backend, config, or capture executables returns `runtime_missing`; rejected startup/connection returns `backend_unavailable`. This avoids losing startup events before renderer subscription and avoids pretending a request reached macOS. Preserve localized port-exhaustion details within backend failures. Keep native permission `unknown` separate, with the existing explicit guide recovery. Unit/UI and real Electron IPC coverage verify these distinctions; PLANS.md holds acceptance evidence.
+
+README cleanup ordering is operationally necessary: AppCleaner first, then rebuild, then install. A settings-only reset removes only settings.json while the app is closed. `git clean -fdX` removes checkout dependencies, helpers, and build outputs; the committed builder recreates them. Clean-source validation includes current working-tree fixes and is not a claim that those fixes have been committed/published or that a fresh Mac's prerequisite installations were tested.
+
+## Permission-check recovery and missing runtime — 2026-11-21
+
+The installed `/Applications/kotonoha.app/Contents/Resources/runtime.json` pointed to absent runtime `ae683584f762a644`. The current backend/venv/native fingerprint matched exactly, so `node scripts/stage-runtime.mjs` restored that snapshot in Application Support without rewriting the installed bundle. Its disappearance is unexplained. Hidden startup of the installed app then passed with both models ready, capture permission `required`, authenticated IPC, and no renderer errors. The native nonprompting helper also returned valid `required` JSON; no native request-API defect was established.
+
+`useLive.check(true)` previously opened setup only for `required`; unknown/rejected checks left only the nonprompting check button available. Keep capture readiness separate from model status, invalidate it on check rejection, and show the setup guide whenever access is unconfirmed. A successful explicit permission result must render even if the initial full status failed. The guide never starts translation and both request/settings actions stay available after errors. Regression coverage is in `tests/interface.spec.mjs`; completed validation and artifact details are tracked in PLANS.md. OS prompt appearance, actual approval, and system capture remain untested interactive operations.
+
+## Root README audience — 2026-11-21
+
+Repeated implementation updates had mixed migration guarantees and maintenance evidence into the introduction/setup/usage path. English and Japanese root READMEs now describe the current product and a single source-build workflow. Portuguese preference migration, legacy kotoba profile handling, obsolete workspace-model layouts, snapshot selection, and detailed smoke/port mechanics belong in existing implementation documentation and acceptance records. Their removal from the root READMEs does not change those application contracts.
+
+Retain operational facts readers need: Apple silicon/macOS/tool prerequisites, same-Mac installation, the required Application Support runtime and installed engines, model-cache locations/recovery, permissions, supported languages, settings, shortcuts, and export limits. Keep developer commands and optional custom paths concise; link backend/native documentation for protocol details. Language/heading/link/image parity and command consistency were checked against source. This documentation-only correction required no app build or implementation-test rerun; acceptance is recorded in PLANS.md.
+
+## Stable dependency maintenance — 2026-11-21
+
+All 9 direct npm dependencies use exact versions in package.json; package-lock.json also pins the transitive graph. Python uses bounded requirements in pyproject.toml and exact resolved versions in uv.lock. Retain these reproducibility mechanisms after upgrades. The PLaMo revision is a separate model contract, not an outdated library pin, and remains unchanged.
+
+Direct dependency audit (official stable releases, excluding prerelease/yanked candidates):
+
+| Dependency | Before | Selected stable |
+| --- | --- | --- |
+| react / react-dom | 19.3.1 | 19.3.1 |
+| @types/react / @types/react-dom | 19.3.0 | 19.3.0 |
+| @electron/packager | 20.3.0 | 20.3.0 |
+| TypeScript | 7.0.2 | 7.0.2 |
+| Electron | 44.7.2 | 45.4.1 |
+| @playwright/test | 1.64.1 | 1.65.1 |
+| Vite | 8.3.4 | 8.3.8 |
+| FastAPI | 0.143.2 | 0.165.0 |
+| Uvicorn | 0.54.0 | 0.54.0 |
+| httpx | 0.28.1 | 0.28.1 |
+| huggingface-hub | 1.33.0 | 2.4.0 |
+| websockets | 16.1.1 | 17.4 |
+| pytest | 9.1.1 | 9.2.0 |
+| pytest-asyncio | 1.4.0 | 1.5.0 |
+| Ruff | 0.17.1 | 0.17.6 |
+
+All 32 previously locked third-party Python packages were compared with PyPI stable metadata. Eighteen were upgraded and four new transitive lock entries were added by Hub 2's httpx2 transport (httpcore2, httpx2, browser-only httpx2-jsfetch, truststore). Existing httpx remains required by the app and its Unix-socket translator. Broadened only the Hub/websockets major upper bounds and raised their minimums to the validated releases. pytest-asyncio's explicit `fixture-scope` setting preserves the previous default instead of silently adopting a future loop-lifetime change; it requires pytest-asyncio 1.5+. The existing app uses none of the removed Electron preload shims, Hub upload APIs, or websockets module aliases. FastAPI's form/default changes do not alter this app's header authentication, JSON/WebSocket messages, or body-free permission endpoint.
+
+Compatible npm transitive updates included ASAR/glob/minimatch; npm audit now reports zero vulnerabilities. Upstream constraints such as Vite's Rolldown pin and Electron's Node type major were respected rather than overridden. Installed NeMo 0.3.0 and llama.cpp 1.0.0 already match their latest stable releases; newer llama.cpp build-number releases marked prerelease were excluded. Python 3.13, Node.js 26.13.1 and npm 12.2.3 were retained.
+
+Sources checked: [npm registry](https://registry.npmjs.org/), [PyPI JSON API](https://docs.pypi.org/api/json/), [Electron 45 breaking changes](https://www.electronjs.org/docs/latest/breaking-changes#breaking-api-changes-450), [Playwright 1.65](https://playwright.dev/docs/release-notes#version-165), [FastAPI release notes](https://fastapi.tiangolo.com/release-notes/), [Hub 2 migration](https://huggingface.co/docs/huggingface_hub/concepts/migration_v2), [websockets changelog](https://websockets.readthedocs.io/en/stable/project/changelog.html), [pytest-asyncio configuration](https://pytest-asyncio.readthedocs.io/en/stable/reference/configuration.html), [NeMo 0.3.0](https://github.com/NVIDIA/NeMo-Speech.cpp/releases/tag/v0.3.0), [llama.cpp 1.0.0](https://github.com/ggml-org/llama.cpp/releases/tag/v1.0.0).
+
+Fresh source and staged-runtime verification passed; acceptance and artifact identifiers are recorded in PLANS.md. Restricted Chromium failed macOS Mach-port initialization, so finite scripted UI checks ran outside that restriction with a new task-local Playwright browser. npm/uv/Electron caches also used ignored .scratch paths to avoid protected global cache writes. No browser interaction with the user's Chrome occurred. The local packager retains an invalid inherited Electron signature after bundle rewriting; the new app alone was re-signed ad hoc with existing entitlements preserved, then passed deep/strict verification. This does not add a Developer ID signature or notarization, and does not change the packaging script's signing policy. Existing apps, model pins, caches and runtime snapshots were preserved; no recording or permission request was performed.
+
+## Application version source — 2026-11-21
+
+Use 0.2.0 to identify the PLaMo translator release after the 0.1.0 baseline. `scripts/package.mjs` reads `package.json` for both `appVersion` and `buildVersion`, so macOS bundle metadata and Electron's About version agree. Keep the root npm lock metadata and Python project/uv virtual-package version aligned when bumping the app. `scripts/smoke-desktop.mjs` checks the actual packaged `app.getVersion()` against the current package version. The capture helper retains its independently versioned metadata and permission identity; this release changes the parent application's version. Acceptance and output identifiers are in PLANS.md.
+
+## PLaMo Q8_0 runtime — 2026-11-21
+
+The user selected the exact mradermacher `plamo-3-translate-0.8b.Q8_0.gguf`, not an MLX equivalent. `backend/config.py` pins its repo revision/filename/size/hash; explicit preparation downloads only this artifact and hashes it once. Offline readiness verifies its exact path/size/magic and installed engine presence. Keep the former caches/builds available. MLX was removed from the Python dependency graph because the requested format needs llama.cpp; the app relies on the installed arm64 1.0.0+ `llama-server` remaining available, like the existing base Python and NeMo prerequisite.
+
+PLaMo uses PFML3 and language codes, with `zh` mapped to `zh-hans`. `/tokenize` adds BOS once and `/completion` receives the resulting token IDs with temperature 0 and both PFN stop markers. The GGUF embedded chat template requires `target_lang`; llama.cpp's generic chat-parser discovery omits it and aborts startup, even when the app uses only completions. Preserve `--no-jinja --chat-template chatml` solely to bypass this unused chat parser. Do not wrap the raw PFML3 prompt in chatml. Tests pin these launch flags and source/target/BOS/stop contracts. Readiness does not load weights; capture still requires explicit Start and permission preflight.
+
+The worker runs over an authenticated socket in a short private `/tmp` directory, avoiding macOS Unix path limits and additional TCP port allocation. Its process inherits the backend group so Electron's quit cleanup owns all descendants. The executor serializes loading/inference; close terminates/waits/kills and removes the client/socket. Tests cover startup retries/failure/timeouts, auth probes and bounded cleanup. Real source and staged-runtime checks established valid translations in four directions plus auth/no-auth and shutdown cleanup; synthetic text timing is not audio latency.
+
+Portuguese is absent from PFN's supported languages. The visible set is now eight languages; backend validation also excludes undocumented codes. Loading a former Portuguese pair changes only its language fields to a supported distinct pair, keeps appearance/UI/interval settings, and leaves the legacy file bytes intact. Builder version probes must combine llama.cpp stdout/stderr, because version output is on stderr; SDK probes remain stdout-only. Acceptance and artifact/runtime identifiers are recorded only in PLANS.md. Actual recording and long-form translation quality were not tested.
+
 ## Automatic local port fallback — 2026-10-17
 
 Fixed ports conflicted with unrelated projects. `backend/ports.py` defines disjoint primary-plus-five pools: API 8765/8770–8774, NeMo 8766/8780–8784. The API binds/listens once and hands that same socket to installed Uvicorn 0.54.0, avoiding a check-then-bind race. Its private stdout reports `service_port` or `ports_unavailable`; `desktop/backend-startup.mjs` validates the report before Electron uses the selected port for HTTP/WebSocket. Port 8767 remains isolated for default smoke tests. Never discover another project through its status response or terminate it to free a port.

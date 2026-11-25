@@ -4,12 +4,13 @@ import { randomBytes } from 'node:crypto';
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defaultSettings, validatedSettings, loadSettings } from './preferences.mjs';
+import { defaultSettings, validatedSettings, loadSettings, createSettingsWriter } from './preferences.mjs';
 import { desktopLabels } from './locale.mjs';
 import { windowAvailable, showController, releaseOverlay, setOverlayInput, showStartupOverlay } from './window-actions.mjs';
 import { createCaptureActions } from './capture-actions.mjs';
 import { startupWindowLayout } from './window-layout.mjs';
 import { backendPort } from './backend-startup.mjs';
+import { runtimeFailure, backendFailure } from './runtime-health.mjs';
 
 app.setName('kotonoha');
 if (process.env.KOTONOHA_TEST_PROFILE) app.setPath('userData', process.env.KOTONOHA_TEST_PROFILE);
@@ -27,6 +28,7 @@ let locked = true;
 let history = [];
 let settings = { ...defaultSettings };
 let preferencesPath;
+let preferencesWriter;
 const text = () => desktopLabels(settings.uiLanguage);
 
 function broadcast(event) {
@@ -115,9 +117,20 @@ async function waitForBackend() {
   throw new Error(backendError || text().pythonStartup);
 }
 const ready = { promise: null };
-const captureActions = createCaptureActions({
-  requestPermission: async () => {
+async function withBackend(action) {
+  const missing = runtimeFailure(root, text());
+  if (missing) return missing;
+  try {
     await ready.promise;
+    return await action();
+  } catch (error) {
+    const failure = backendFailure(text());
+    if (['PORTS_UNAVAILABLE', 'PORT_IN_USE'].includes(error.code)) failure.error.message = error.message;
+    return failure;
+  }
+}
+const captureActions = createCaptureActions({
+  requestPermission: () => withBackend(async () => {
     // Active capture already has access; a second permission request must not interrupt it.
     const active = state !== 'stopped';
     const response = await fetch(`${base}${active ? '/api/status' : '/api/capture/permission'}`, {
@@ -128,7 +141,7 @@ const captureActions = createCaptureActions({
     if (!response.ok) throw new Error(`${text().readiness} (${response.status})`);
     const result = await response.json();
     return active ? result.capture : result;
-  },
+  }),
   start: async () => {
     if (quitting || state !== 'stopped') return;
     await connect();
@@ -174,6 +187,7 @@ else {
     app.dock?.setIcon(path.join(here, '../assets/kotonoha.png'));
     app.setAboutPanelOptions({ applicationName: 'kotonoha', iconPath: path.join(here, '../assets/kotonoha.png') });
     preferencesPath = path.join(app.getPath('userData'), 'settings.json');
+    preferencesWriter = createSettingsWriter(preferencesPath);
     const legacy = process.env.KOTONOHA_TEST_PROFILE ? [] : ['kotoba', 'kotoba-live-subtitles'].map((name) => path.join(app.getPath('appData'), name, 'settings.json'));
     settings = loadSettings(preferencesPath, legacy);
     const area = screen.getPrimaryDisplay().workArea;
@@ -196,18 +210,21 @@ else {
     globalShortcut.register('Command+Shift+K', openController);
     globalShortcut.register('Command+Shift+L', () => setLocked(!locked));
     handle('app:snapshot', () => ({ settings, state, latest, history, visible: windowAvailable(overlay, quitting) && overlay.isVisible(), locked }));
-    handle('app:status', async () => {
-      await ready.promise;
+    handle('app:status', () => withBackend(async () => {
       const response = await fetch(`${base}/api/status`, { headers: { Authorization: `Bearer ${token}`, 'Accept-Language': settings.uiLanguage }, signal: AbortSignal.timeout(10000) });
       if (!response.ok) throw new Error(`${text().readiness} (${response.status})`);
       return response.json();
-    });
-    handle('app:settings', (value) => {
+    }));
+    handle('app:settings', async (value) => {
+      const previousLanguage = settings.uiLanguage;
       try { settings = validatedSettings(value); } catch (error) { throw new Error(text()[error.code] || error.message); }
-      writeFileSync(preferencesPath, JSON.stringify(settings));
+      const saved = preferencesWriter.save(settings);
       broadcast({ type: 'settings', settings });
-      refreshNativeUI();
-      if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'ui_language', ui_language: settings.uiLanguage }));
+      if (settings.uiLanguage !== previousLanguage) {
+        refreshNativeUI();
+        if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'ui_language', ui_language: settings.uiLanguage }));
+      }
+      await saved;
       return settings;
     });
     handle('app:capture-permission', captureActions.requestPermission);
@@ -226,7 +243,8 @@ else {
       return !result.canceled;
     });
     const python = path.join(root, '.venv/bin/python');
-    if (existsSync(python)) {
+    const missing = runtimeFailure(root, text());
+    if (!missing) {
       backend = spawn(python, ['-m', 'backend.app'], { cwd: root, env: { ...process.env, PYTHONHOME: undefined, PYTHONPATH: undefined, PYTHONNOUSERSITE: '1', RT_TOKEN: token, PYTHONUNBUFFERED: '1', RT_ROOT: root, RT_PORT: String(port) }, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
       backend.stderr.on('data', (data) => { backendError = (backendError + data.toString()).slice(-3000); });
       backend.on('error', (error) => { backendError = error.message; statusEvent({ type: 'error', message: text().missingPython }); });
@@ -236,8 +254,13 @@ else {
         base = `http://127.0.0.1:${port}`;
         await waitForBackend();
       });
-    } else ready.promise = Promise.reject(new Error(text().missingPython));
-    ready.promise.catch((error) => { backendError = error.message; statusEvent({ type: 'error', message: error.message }); });
+    } else ready.promise = Promise.reject(new Error(missing.error.message));
+    ready.promise.catch((error) => {
+      backendError = error.message;
+      const failure = runtimeFailure(root, text()) || backendFailure(text());
+      if (['PORTS_UNAVAILABLE', 'PORT_IN_USE'].includes(error.code)) failure.error.message = error.message;
+      statusEvent({ type: 'error', code: failure.error.code, message: failure.error.message });
+    });
     await controller.loadFile(path.join(here, '../dist/index.html'));
     await overlay.loadFile(path.join(here, '../dist/index.html'), { query: { view: 'subtitles' } });
     if (!backendError && state === 'stopped' && showStartupOverlay(overlay, { hidden: process.env.KOTONOHA_TEST_HIDDEN === '1', quitting })) {
@@ -261,6 +284,8 @@ app.on('before-quit', (event) => {
   if (blocker !== undefined) powerSaveBlocker.stop(blocker);
   const child = backend;
   void (async () => {
+    try { await preferencesWriter?.flush(); }
+    catch (error) { console.error('Could not save subtitle settings:', error.message); }
     if (child?.pid) {
       if (child.exitCode === null) {
         await new Promise((resolve) => {
@@ -269,8 +294,8 @@ app.on('before-quit', (event) => {
           child.kill('SIGTERM');
         });
       }
-      // NeMo and the capture helper belong to this detached process group.
-      // Kill the group after graceful Python shutdown so a stalled MLX worker cannot orphan them.
+      // NeMo, llama.cpp and the capture helper belong to this detached process group.
+      // Kill the group after graceful Python shutdown so a stalled translation worker cannot orphan them.
       try { process.kill(-child.pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') console.error('Could not stop audio service:', error.message); }
     }
     app.quit();

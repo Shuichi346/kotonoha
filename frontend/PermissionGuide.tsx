@@ -6,7 +6,7 @@ import type { Live } from './useLive';
 export function PermissionGuide({ live }: { live: Live }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const text = labels(live.settings.uiLanguage);
-  const granted = live.readiness?.capture.ready === true;
+  const granted = live.capture?.ready === true;
   const busy = live.requestingPermission || live.checking;
   useEffect(() => {
     if (live.permissionOpen && !dialog.current?.open) dialog.current?.showModal();

@@ -26,6 +26,22 @@ test('legacy settings migrate with Japanese UI and preserve subtitle preferences
   writeFileSync(current, JSON.stringify({ ...loaded, uiLanguage: 'en' }));
   assert.equal(loadSettings(current, [old]).uiLanguage, 'en');
 });
+test('Portuguese preferences migrate language fields while preserving saved appearance', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'kotonoha-plamo-settings-'));
+  const file = path.join(dir, 'legacy.json');
+  for (const pair of [{ source: 'pt', target: 'en' }, { source: 'ja', target: 'pt' }]) {
+    const original = JSON.stringify({ ...defaultSettings, ...pair, fontSize: 48, showOriginal: true, uiLanguage: 'en' });
+    writeFileSync(file, original);
+    const saved = loadSettings(file);
+    assert.equal(saved.fontSize, 48);
+    assert.equal(saved.showOriginal, true);
+    assert.equal(saved.uiLanguage, 'en');
+    assert(![saved.source, saved.target].includes('pt'));
+    assert.notEqual(saved.source, saved.target);
+    assert.equal(readFileSync(file, 'utf8'), original);
+  }
+  assert.throws(() => validatedSettings({ ...defaultSettings, target: 'pt' }));
+});
 test('commit intervals persist and invalid values are rejected without replacing saved preferences', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'kotonoha-interval-'));
   const file = path.join(dir, 'settings.json');
@@ -108,6 +124,25 @@ test('runtime staging does not require a checkout model directory', async () => 
   const runtime = stageRuntime(source, path.join(dir, 'runtime'));
   assert(existsSync(path.join(runtime.root, 'backend/app.py')));
   assert(!existsSync(path.join(runtime.root, 'models')));
+});
+
+test('staged relative Python aliases work after moving the source checkout', async () => {
+  const { stageRuntime } = await import('../scripts/stage-runtime.mjs');
+  const { mkdirSync, symlinkSync, existsSync, readlinkSync, realpathSync, renameSync } = await import('node:fs');
+  const dir = mkdtempSync(path.join(tmpdir(), 'kotonoha-python-aliases-'));
+  const source = path.join(dir, 'Documents/source');
+  for (const name of ['backend', '.venv/bin', 'native/bin']) mkdirSync(path.join(source, name), { recursive: true });
+  for (const name of ['backend/app.py', '.venv/pyvenv.cfg', 'native/bin/audio-capture']) writeFileSync(path.join(source, name), name);
+  symlinkSync(process.execPath, path.join(source, '.venv/bin/python'));
+  for (const name of ['python3', 'python3.13']) symlinkSync('python', path.join(source, '.venv/bin', name));
+  const runtime = stageRuntime(source, path.join(dir, 'runtime'));
+  renameSync(source, path.join(dir, 'Documents/moved'));
+  for (const name of ['python', 'python3', 'python3.13']) {
+    const binary = path.join(runtime.root, '.venv/bin', name);
+    assert(existsSync(binary));
+    assert.equal(realpathSync(binary), realpathSync(process.execPath));
+  }
+  assert.equal(readlinkSync(path.join(runtime.root, '.venv/bin/python3')), 'python');
 });
 
 test('permission requests are single flight and start waits until the permission dialog settles', async () => {

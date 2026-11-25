@@ -1,5 +1,6 @@
 """Shared cache discovery stays offline and rejects incomplete or unrelated models."""
 
+import hashlib
 import json
 import os
 import subprocess
@@ -27,27 +28,36 @@ def test_huggingface_cache_overrides_and_pinned_snapshot(tmp_path):
             timeout=5,
         )
         assert result.stdout.strip() == str(
-            root / "models--mlx-community--Hy-MT2-1.8B-4bit/snapshots" / config.MODEL_REVISION
+            root
+            / "models--mradermacher--plamo-3-translate-0.8b-GGUF/snapshots"
+            / config.MODEL_REVISION
         )
 
 
-def test_translation_readiness_requires_tokenizer_and_all_weight_shards(tmp_path, monkeypatch):
-    monkeypatch.setattr(config, "MODEL_DIR", tmp_path)
+def test_translation_readiness_requires_exact_gguf_and_engine(tmp_path, monkeypatch):
+    artifact = tmp_path / config.MODEL_FILENAME
+    monkeypatch.setattr(config, "MODEL_PATH", artifact)
+    monkeypatch.setattr(config, "MODEL_SIZE", 8)
+    monkeypatch.setattr(config, "llama_binary", lambda: "/installed/llama-server")
     assert not config.translation_ready()
-    for name in ["config.json", "tokenizer_config.json", "tokenizer.json"]:
-        (tmp_path / name).write_text("{}")
-    (tmp_path / "model-1.safetensors").write_bytes(b"weights")
+    artifact.with_name("different.gguf").write_bytes(b"GGUFdata")
+    assert not config.translation_ready()
+    artifact.write_bytes(b"GGUFbad")
+    assert not config.translation_ready()
+    artifact.write_bytes(b"wrong!!!")
+    assert not config.translation_ready()
+    artifact.write_bytes(b"GGUFdata")
     assert config.translation_ready()
-    (tmp_path / "model.safetensors.index.json").write_text(
-        json.dumps({"weight_map": {"a": "model-1.safetensors", "b": "model-2.safetensors"}})
-    )
+    monkeypatch.setattr(config, "llama_binary", lambda: None)
     assert not config.translation_ready()
-    (tmp_path / "model-2.safetensors").write_bytes(b"weights")
-    assert config.translation_ready()
-    (tmp_path / "model-2.safetensors").write_bytes(b"")
-    assert not config.translation_ready()
-    (tmp_path / "model.safetensors.index.json").write_text("invalid")
-    assert not config.translation_ready()
+
+
+def test_configured_engine_does_not_fall_back_to_another_installation(tmp_path, monkeypatch):
+    binary = tmp_path / "llama-server"
+    monkeypatch.setenv("KOTONOHA_LLAMA_SERVER", str(binary))
+    assert config.llama_binary() is None
+    binary.touch()
+    assert config.llama_binary() == str(binary)
 
 
 @pytest.fixture
@@ -102,21 +112,55 @@ def test_asr_readiness_honors_index_override_and_fails_closed(nemo_cache, monkey
     assert not config.asr_ready()
 
 
-def test_preparation_uses_shared_caches_without_workspace_overrides(monkeypatch):
-    download, run = Mock(), Mock()
-    monkeypatch.setattr("huggingface_hub.snapshot_download", download)
+@pytest.fixture
+def preparation(tmp_path, monkeypatch):
+    artifact = tmp_path / config.MODEL_FILENAME
+    artifact.write_bytes(b"GGUFsynthetic model")
+    download = Mock(return_value=str(artifact))
+    run = Mock()
+    monkeypatch.setattr("huggingface_hub.hf_hub_download", download)
     monkeypatch.setattr(prepare.subprocess, "run", run)
     monkeypatch.setattr(prepare, "nemo_binary", lambda: "/installed/nemo-speech")
+    monkeypatch.setattr(prepare, "llama_binary", lambda: "/installed/llama-server")
+    monkeypatch.setattr(prepare, "MODEL_SHA256", hashlib.sha256(artifact.read_bytes()).hexdigest())
     monkeypatch.setattr(sys, "argv", ["prepare"])
+    return artifact, download, run
+
+
+def test_preparation_downloads_only_pinned_gguf_and_preserves_cache_overrides(preparation):
+    _, download, run = preparation
     previous = os.environ.copy()
     prepare.main()
     assert os.environ == previous
-    assert download.call_args.args == (config.MODEL_ID,)
-    assert download.call_args.kwargs["revision"] == config.MODEL_REVISION
-    assert "local_dir" not in download.call_args.kwargs
-    assert "cache_dir" not in download.call_args.kwargs
-    assert run.call_args.args == (["/installed/nemo-speech", "pull", config.ASR_MODEL],)
-    assert "env" not in run.call_args.kwargs
+    download.assert_called_once_with(
+        config.MODEL_ID,
+        filename=config.MODEL_FILENAME,
+        revision=config.MODEL_REVISION,
+    )
+    run.assert_called_once_with(
+        ["/installed/nemo-speech", "pull", config.ASR_MODEL],
+        check=True,
+        timeout=1800,
+    )
+
+
+def test_preparation_rejects_hash_mismatch_before_asr_download(preparation, monkeypatch):
+    _, download, run = preparation
+    monkeypatch.setattr(prepare, "MODEL_SHA256", "0" * 64)
+    with pytest.raises(SystemExit, match="SHA-256"):
+        prepare.main()
+    download.assert_called_once()
+    run.assert_not_called()
+
+
+@pytest.mark.parametrize("missing", ["nemo_binary", "llama_binary"])
+def test_missing_tools_cannot_trigger_download(preparation, monkeypatch, missing):
+    _, download, run = preparation
+    monkeypatch.setattr(prepare, missing, lambda: None)
+    with pytest.raises(SystemExit, match="nemo-speech|llama-server"):
+        prepare.main()
+    download.assert_not_called()
+    run.assert_not_called()
 
 
 async def test_missing_asr_cache_cannot_launch_or_download(monkeypatch):

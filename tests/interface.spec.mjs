@@ -1,25 +1,32 @@
 import { test, expect } from '@playwright/test';
 import { formatTranscript } from '../desktop/transcript.mjs';
 import { defaultSettings } from '../desktop/preferences.mjs';
+import { desktopLabels } from '../desktop/locale.mjs';
 const subtitle = { type: 'subtitle', id: 'test-1', source: 'A bridge between languages.', text: '言葉と言葉をつなぐ架け橋。', start: 0, end: 3, latency_ms: 100 };
 async function bridge(page, initialLatest = null, options = {}) {
-  await page.addInitScript(({ initialLatest, options, defaultSettings }) => {
+  const text = desktopLabels(options.settings?.uiLanguage || 'ja');
+  const failures = { runtime_missing: text.runtimeMissing, backend_unavailable: text.backendUnavailable };
+  await page.addInitScript(({ initialLatest, options, defaultSettings, failures }) => {
     const listeners = new Set();
-    const settings = { ...defaultSettings };
+    const settings = { ...defaultSettings, ...options.settings };
     window.testCalls = [];
     window.testPermission = options.permission || 'granted';
-    window.testStatusFailure = false;
+    window.testStatusFailure = options.statusFailure || false;
+    window.testServiceFailure = options.serviceFailure || null;
+    window.testPermissionServiceFailure = options.permissionServiceFailure || null;
     window.testRequestFailure = false;
     window.testResolvePermission = null;
     window.testEmit = (event) => listeners.forEach((fn) => fn(event));
     window.kotonoha = {
       snapshot: async () => ({ settings, state: 'stopped', latest: initialLatest, history: [], visible: true, locked: false }),
       status: async () => {
+        if (window.testServiceFailure) return { error: { code: window.testServiceFailure, message: failures[window.testServiceFailure] } };
         if (window.testStatusFailure) throw new Error('backend unavailable');
         return { capture: { ready: window.testPermission === 'granted', permission: window.testPermission, detail: 'Permission status' }, asr: { ready: true, detail: 'Ready' }, translation: { ready: true, detail: 'Ready' } };
       },
       requestCapturePermission: async () => {
         window.testCalls.push('permission');
+        if (window.testPermissionServiceFailure) return { error: { code: window.testPermissionServiceFailure, message: failures[window.testPermissionServiceFailure] } };
         if (options.deferPermission) await new Promise((resolve) => { window.testResolvePermission = resolve; });
         if (window.testRequestFailure) throw new Error('native helper error');
         window.testPermission = options.requestResult || 'required';
@@ -36,7 +43,7 @@ async function bridge(page, initialLatest = null, options = {}) {
       export: async (format) => { window.testCalls.push(`export:${format}`); return true; },
       subscribe: (callback) => { listeners.add(callback); return () => listeners.delete(callback); }
     };
-  }, { initialLatest, options, defaultSettings });
+  }, { initialLatest, options, defaultSettings, failures });
 }
 
 test('start/stop, language settings, and independent subtitle controls', async ({ page }) => {
@@ -103,6 +110,62 @@ test('history, export, error handling and source language conflicts', async ({ p
   await page.getByRole('button', { name: 'ライブ翻訳', exact: true }).click();
   await page.evaluate(() => window.testEmit({ type: 'error', message: '音声の取得に失敗しました。' }));
   await expect(page.getByRole('alert')).toContainText('音声の取得に失敗しました。');
+});
+
+test('capped history preserves rows and avoids repeated timestamp formatting during live updates', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => { if (['error', 'warning'].includes(message.type())) errors.push(message.text()); });
+  await bridge(page);
+  await page.addInitScript(() => {
+    window.testTimestampFormats = 0;
+    const originalTime = Date.prototype.toLocaleTimeString;
+    Date.prototype.toLocaleTimeString = function (...args) {
+      window.testTimestampFormats++;
+      return originalTime.apply(this, args);
+    };
+    const originalFormat = Object.getOwnPropertyDescriptor(Intl.DateTimeFormat.prototype, 'format');
+    Object.defineProperty(Intl.DateTimeFormat.prototype, 'format', {
+      configurable: true,
+      get() {
+        const format = originalFormat.get.call(this);
+        return (...args) => { window.testTimestampFormats++; return format(...args); };
+      },
+    });
+  });
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: '翻訳を開始', exact: true })).toBeEnabled();
+  await page.evaluate(() => {
+    for (let index = 0; index < 1000; index++) {
+      window.testEmit({ type: 'subtitle', id: `history-${index}`, source: `source ${index}`, text: `caption ${index}`, start: index, end: index + 1, latency_ms: 0, receivedAt: 1700000000000 + index * 1000 });
+    }
+  });
+  await page.getByRole('button', { name: /履歴/ }).click();
+  const rows = page.locator('.transcript li');
+  await expect(rows).toHaveCount(1000);
+  expect(await page.evaluate(() => window.testTimestampFormats)).toBe(1000);
+  await page.evaluate(() => {
+    window.testHistoryRows = [...document.querySelectorAll('.transcript li')];
+    window.testEmit({ type: 'partial', text: 'A new partial transcript' });
+  });
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  expect(await page.evaluate(() => window.testTimestampFormats)).toBe(1000);
+  await page.evaluate(() => window.testEmit({ type: 'subtitle', id: 'history-1000', source: 'source 1000', text: 'caption 1000', start: 1000, end: 1001, latency_ms: 0, receivedAt: 1700001000000 }));
+  await expect(rows.last()).toContainText('caption 1000');
+  await expect(rows.first()).toContainText('caption 1');
+  await expect(rows).toHaveCount(1000);
+  expect(await page.evaluate(() => window.testHistoryRows.slice(1).filter((row) => row.isConnected).length)).toBe(999);
+  expect(await page.evaluate(() => window.testTimestampFormats)).toBe(1001);
+  await page.evaluate(async () => {
+    const { settings } = await window.kotonoha.snapshot();
+    await window.kotonoha.settings({ ...settings, uiLanguage: 'en' });
+  });
+  await expect(page.getByRole('heading', { name: 'History for this session', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => window.testTimestampFormats)).toBe(2001);
+  const expectedTime = await page.evaluate(() => new Date(1700000001000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+  await expect(rows.first().locator('time')).toHaveText(expectedTime);
+  await expect(page.locator('vite-error-overlay')).toHaveCount(0);
+  expect(errors).toEqual([]);
 });
 
 test('transcript exports retain every translation and valid monotonic timings', () => {
@@ -343,9 +406,115 @@ test('permission revocation and failures show localized actionable guidance with
   await expect(guide).toContainText('許可画面を開けませんでした。システム設定から許可して');
   await page.evaluate(() => { window.testStatusFailure = true; });
   await guide.getByRole('button', { name: '許可状況を確認', exact: true }).click();
-  await expect(guide).toContainText('音声へのアクセスを確認できませんでした。少し待って');
+  await expect(guide).toContainText('音声へのアクセスを確認できませんでした。');
   await expect(guide.getByRole('button', { name: 'システム設定を開く', exact: true })).toBeEnabled();
   expect(await page.evaluate(() => window.testCalls)).toEqual(['permission']);
+});
+
+for (const uiLanguage of ['ja', 'en']) {
+  for (const failure of ['unknown', 'unavailable']) {
+    test(`permission setup remains reachable after ${failure} status in ${uiLanguage}`, async ({ page }) => {
+      const errors = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      page.on('console', (message) => { if (['error', 'warning'].includes(message.type())) errors.push(message.text()); });
+      await page.setViewportSize({ width: 480, height: 640 });
+      await bridge(page, null, { permission: 'unknown', statusFailure: failure === 'unavailable', settings: { uiLanguage } });
+      await page.goto('/');
+      await expect(page).toHaveURL('http://127.0.0.1:5173/');
+      await expect(page).toHaveTitle(uiLanguage === 'ja' ? 'kotonoha — ライブ字幕翻訳' : 'kotonoha — Live subtitle translation');
+      const guide = page.getByRole('dialog');
+      const requestName = uiLanguage === 'ja' ? '許可画面へ進む' : 'Continue to permission';
+      const settingsName = uiLanguage === 'ja' ? 'システム設定を開く' : 'Open System Settings';
+      const laterName = uiLanguage === 'ja' ? 'あとで設定する' : 'Set up later';
+      const setupName = uiLanguage === 'ja' ? '音声の許可を設定' : 'Set up audio access';
+      await expect(guide).toBeVisible();
+      await expect(guide).toContainText(uiLanguage === 'ja' ? '音声へのアクセスを確認できませんでした。' : 'Audio access could not be checked.');
+      expect(await page.evaluate(() => window.testCalls)).toEqual([]);
+      await guide.getByRole('button', { name: laterName, exact: true }).click();
+      await expect(guide).not.toBeVisible();
+      await page.getByRole('button', { name: setupName, exact: true }).click();
+      await expect(guide).toBeVisible();
+      const request = guide.getByRole('button', { name: requestName, exact: true });
+      await request.scrollIntoViewIfNeeded();
+      await page.mouse.move(0, 0);
+      await expect(request).toHaveCSS('background-color', 'rgb(201, 54, 54)');
+      await page.screenshot({ path: `/private/tmp/kotonoha-access-recovery-${failure}-${uiLanguage}.png`, animations: 'disabled' });
+      await guide.getByRole('button', { name: settingsName, exact: true }).click();
+      await request.click();
+      await expect(guide).toContainText(uiLanguage === 'ja' ? '許可を確認できていません' : 'Access is not confirmed yet.');
+      expect(await page.evaluate(() => window.testCalls)).toEqual(['settings', 'permission']);
+      await expect(page.locator('vite-error-overlay')).toHaveCount(0);
+      expect(errors).toEqual([]);
+    });
+  }
+}
+
+for (const language of ['ja', 'en']) {
+  for (const code of ['runtime_missing', 'backend_unavailable']) {
+    test(`${code} shows service recovery instead of an OS permission guide in ${language}`, async ({ page }) => {
+      const errors = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      page.on('console', (message) => { if (['error', 'warning'].includes(message.type())) errors.push(message.text()); });
+      const text = desktopLabels(language);
+      await bridge(page, null, { serviceFailure: code, settings: { uiLanguage: language }, permission: 'required' });
+      await page.setViewportSize({ width: 480, height: 640 });
+      await page.goto('/');
+      await expect(page).toHaveURL('http://127.0.0.1:5173/');
+      await expect(page).toHaveTitle(`kotonoha — ${language === 'ja' ? 'ライブ字幕翻訳' : 'Live subtitle translation'}`);
+      await expect(page.getByRole('dialog')).not.toBeVisible();
+      await expect(page.getByRole('alert')).toContainText(code === 'runtime_missing' ? text.runtimeMissing : text.backendUnavailable);
+      await expect(page.getByRole('button', { name: language === 'ja' ? '翻訳を開始' : 'Start translation', exact: true })).toBeDisabled();
+      expect(await page.evaluate(() => window.testCalls)).toEqual([]);
+      await page.screenshot({ path: `/private/tmp/kotonoha-${code}-${language}.png`, animations: 'disabled' });
+      await page.evaluate(() => { window.testServiceFailure = null; });
+      await page.getByRole('alert').getByRole('button').click();
+      const guide = page.getByRole('dialog');
+      await expect(guide).toBeVisible();
+      await expect(guide.getByRole('button', { name: language === 'ja' ? '許可画面へ進む' : 'Continue to permission', exact: true })).toBeEnabled();
+      await expect(page.locator('vite-error-overlay')).toHaveCount(0);
+      expect(errors).toEqual([]);
+    });
+  }
+}
+
+test('service failure returned by a permission request closes setup and blocks start', async ({ page }) => {
+  await bridge(page, null, { permission: 'required', permissionServiceFailure: 'backend_unavailable' });
+  await page.goto('/');
+  const guide = page.getByRole('dialog');
+  await expect(guide).toBeVisible();
+  await guide.getByRole('button', { name: '許可画面へ進む', exact: true }).click();
+  await expect(guide).not.toBeVisible();
+  await expect(page.getByRole('alert')).toContainText(desktopLabels('ja').backendUnavailable);
+  await expect(page.getByRole('button', { name: '翻訳を開始', exact: true })).toBeDisabled();
+  expect(await page.evaluate(() => window.testCalls)).toEqual(['permission']);
+});
+
+test('successful permission request survives an unavailable initial model status', async ({ page }) => {
+  await bridge(page, null, { statusFailure: true, requestResult: 'granted' });
+  await page.goto('/');
+  const guide = page.getByRole('dialog');
+  await expect(guide).toBeVisible();
+  await guide.getByRole('button', { name: '許可画面へ進む', exact: true }).click();
+  await expect(guide).toContainText('システム音声へのアクセスを確認できました');
+  expect(await page.evaluate(() => window.testCalls)).toEqual(['permission']);
+  await guide.getByRole('button', { name: '閉じて翻訳へ', exact: true }).click();
+  await expect(guide).not.toBeVisible();
+  await page.evaluate(() => { window.testStatusFailure = false; });
+  await page.getByRole('button', { name: '翻訳を開始', exact: true }).click();
+  await expect(page.getByRole('button', { name: '翻訳を停止', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => window.testCalls)).toEqual(['permission', 'start']);
+});
+
+test('start-time status failure opens setup without starting capture', async ({ page }) => {
+  await bridge(page);
+  await page.goto('/');
+  const start = page.getByRole('button', { name: '翻訳を開始', exact: true });
+  await expect(start).toBeEnabled();
+  await page.evaluate(() => { window.testStatusFailure = true; });
+  await start.click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByRole('button', { name: '許可画面へ進む', exact: true })).toBeEnabled();
+  expect(await page.evaluate(() => window.testCalls)).toEqual([]);
 });
 
 test('settings-first setup and failed permission requests retain an explicit prompt retry', async ({ page }) => {
@@ -400,7 +569,7 @@ test('compact controller keeps primary controls usable and lower settings reacha
   await page.getByRole('switch', { name: '原文も表示', exact: true }).check();
   await expect(page.getByRole('switch', { name: '原文も表示', exact: true })).toBeChecked();
   await page.getByText('ローカルモデル', { exact: true }).scrollIntoViewIfNeeded();
-  await expect(page.getByText('Hy-MT2 1.8B', { exact: true })).toBeVisible();
+  await expect(page.getByText('PLaMo 3 Translate 0.8B', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '設定', exact: true }).click();
   await page.getByLabel('Language', { exact: true }).selectOption('en');
   await page.getByRole('button', { name: 'Live translation', exact: true }).click();

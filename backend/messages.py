@@ -3,6 +3,18 @@
 # Keep bilingual entries separate so their display widths remain readable.
 # fmt: off
 MESSAGES = {
+    "対応していない入力形式です。":
+        "This input format is not supported.",
+    "llama-server がありません。llama.cpp 1.0.0 以降を導入してください。":
+        "llama-server is missing. Install llama.cpp 1.0.0 or later.",
+    "llama.cpp 1.0.0 以降が必要です。":
+        "llama.cpp 1.0.0 or later is required.",
+    "翻訳エンジンを起動できませんでした。":
+        "Unable to start the translation engine.",
+    "翻訳エンジンの起動が60秒以内に完了しませんでした。":
+        "The translation engine did not finish starting within 60 seconds.",
+    "翻訳を完了できませんでした。":
+        "Unable to complete the translation.",
     "別の字幕セッションが実行中です。先に停止してください。":
         "Another subtitle session is running. Stop it first.",
     "npm run build:native を実行してください。":
@@ -49,6 +61,8 @@ MESSAGES = {
         "Subtitle processing ended unexpectedly.",
     "残りの翻訳を60秒以内に完了できませんでした。":
         "Remaining translations did not finish within 60 seconds.",
+    "残りの翻訳を制限時間以内に完了できませんでした。":
+        "Remaining translations did not finish within the time limit.",
     "モデルの処理が制限時間を超えました。":
         "Model processing timed out.",
     "NeMo の起動が60秒以内に完了しませんでした。":

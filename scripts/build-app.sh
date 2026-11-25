@@ -78,6 +78,23 @@ if probe node --version; then minimum_version "$output" 26.5.0 Node.js; fi
 if probe npm --version; then minimum_version "$output" 12.0.1 npm; fi
 probe uv --version || :
 
+llama="${KOTONOHA_LLAMA_SERVER:-$(command -v llama-server || true)}"
+if [[ -z "$llama" && -x /opt/homebrew/bin/llama-server ]]; then llama=/opt/homebrew/bin/llama-server; fi
+if [[ -n "$llama" && "$llama" == /* && -x "$llama" ]]; then
+    export KOTONOHA_LLAMA_SERVER="$llama"
+    # llama.cpp writes its version to stderr; keep generic probes stdout-only for SDK parsing.
+    if probe /bin/sh -c '"$1" --version 2>&1' sh "$llama"; then
+        if [[ "$output" =~ version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+            minimum_version "${BASH_REMATCH[1]}" 1.0.0 llama.cpp
+        else
+            problem 'Cannot read llama.cpp version (requires 1.0.0 or later).'
+        fi
+    fi
+    probe xcrun lipo -verify_arch arm64 "$llama" || :
+else
+    problem 'Install llama.cpp 1.0.0 or later with brew install llama.cpp, or set KOTONOHA_LLAMA_SERVER.'
+fi
+
 # Match backend/config.py, including explicit installations outside PATH.
 nemo="${NEMO_SPEECH_BIN:-}"
 if [[ -z "$nemo" ]]; then

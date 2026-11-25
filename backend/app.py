@@ -14,7 +14,7 @@ from backend.messages import header_language, localize, localize_event, ui_langu
 from backend.pipeline import LiveSession, validate_commit_interval
 from backend.ports import API_PORTS, PortsUnavailableError, bind_first_available
 from backend.runtime import NemoRuntime, capture_permission
-from backend.translation import Translator
+from backend.translation import LANGUAGE_CODES, Translator
 
 # Curated transcription-ready and broad-coverage languages exposed by the app.
 SOURCES = {
@@ -47,7 +47,8 @@ SOURCES = {
     "ro",
     "et",
 }
-TARGETS = SOURCES | {"ar", "hi", "ru", "nl", "sv", "pl", "tr", "uk", "vi", "th", "id"}
+SOURCES &= LANGUAGE_CODES.keys()
+TARGETS = SOURCES | {"th", "id"}
 
 
 class SessionManager:
@@ -147,7 +148,7 @@ def create_app(token: str | None = None, manager: SessionManager | None = None):
             },
             "translation": {
                 "ready": translation_ready(),
-                "detail": "Hy-MT2 1.8B · MLX 4-bit"
+                "detail": "PLaMo 3 Translate 0.8B · GGUF Q8_0"
                 if translation_ready()
                 else "翻訳モデルがありません。npm run prepare:models を実行してください。",
             },

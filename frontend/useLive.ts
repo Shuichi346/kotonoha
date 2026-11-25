@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { labels, uiLanguage } from './i18n';
-import type { Readiness, SessionState, Settings, Subtitle } from './types';
+import type { ModelStatus, Readiness, ServiceFailure, SessionState, Settings, Subtitle } from './types';
 export const defaults: Settings = { source: 'en', target: 'ja', uiLanguage: 'ja', commitIntervalSeconds: 15, fontSize: 30, showOriginal: false, background: 0, expiry: 12 };
 export function useLive() {
   const [settings, setSettings] = useState(defaults);
@@ -12,30 +12,46 @@ export function useLive() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [partial, setPartial] = useState('');
-  const [readiness, setReadiness] = useState<Readiness | null>(null);
+  const [models, setModels] = useState<Pick<Readiness, 'asr' | 'translation'> | null>(null);
+  const [capture, setCapture] = useState<ModelStatus | null>(null);
+  const readiness = models && capture ? { ...models, capture } : null;
   const [checking, setChecking] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const [permissionOpen, setPermissionOpen] = useState(false);
   const [permissionAttempted, setPermissionAttempted] = useState(false);
   const [requestingPermission, setRequestingPermission] = useState(false);
   const [permissionIssue, setPermissionIssue] = useState<'' | 'permissionCheckFailed' | 'permissionRequestFailed' | 'permissionSettingsFailed'>('');
+  const [serviceFailure, setServiceFailure] = useState<ServiceFailure['error'] | null>(null);
   const actionPending = useRef(false);
   const checkSequence = useRef(0);
-  function openPermissionGuide() { setError(''); setMessage(''); setPermissionIssue(''); setPermissionOpen(true); }
+  function showServiceFailure(failure: ServiceFailure['error']) {
+    setServiceFailure(failure); setCapture(null); setPermissionIssue(''); setPermissionOpen(false); setError(''); setMessage('');
+  }
+  function openPermissionGuide() { setError(''); setMessage(''); setPermissionOpen(true); }
   async function check(showGuide = false) {
     if (!window.kotonoha) return;
     const sequence = ++checkSequence.current;
     setChecking(true);
     try {
       const result = await window.kotonoha.status();
+      if ('error' in result) {
+        if (sequence === checkSequence.current) showServiceFailure(result.error);
+        return;
+      }
       if (sequence === checkSequence.current) {
-        setReadiness(result);
+        setServiceFailure(null);
+        setModels({ asr: result.asr, translation: result.translation });
+        setCapture(result.capture);
         setPermissionIssue(result.capture.permission === 'unknown' ? 'permissionCheckFailed' : '');
-        if (showGuide && result.capture.permission === 'required') openPermissionGuide();
+        if (showGuide && !result.capture.ready) openPermissionGuide();
       }
       return result;
     } catch {
-      if (sequence === checkSequence.current) setPermissionIssue('permissionCheckFailed');
+      if (sequence === checkSequence.current) {
+        setCapture({ ready: false, permission: 'unknown', detail: '' });
+        setPermissionIssue('permissionCheckFailed');
+        if (showGuide) openPermissionGuide();
+      }
     } finally { if (sequence === checkSequence.current) setChecking(false); }
   }
   useEffect(() => {
@@ -49,8 +65,11 @@ export function useLive() {
       if (event.type === 'overlay') { setVisible(event.visible); setLocked(event.locked); }
       if (event.type === 'status') { setState(event.state); setMessage(event.message ?? ''); if (event.state === 'stopped') setPartial(''); }
       if (event.type === 'error') {
-        if (event.code === 'capture_permission_required') {
-          setReadiness((previous) => previous ? { ...previous, capture: { ready: false, permission: 'required', detail: '' } } : previous);
+        if (event.code === 'runtime_missing' || event.code === 'backend_unavailable') {
+          showServiceFailure({ code: event.code, message: event.message });
+        } else if (event.code === 'capture_permission_required') {
+          setServiceFailure(null);
+          setCapture({ ready: false, permission: 'required', detail: '' });
           setState('stopped'); openPermissionGuide();
         } else setError(event.message);
       }
@@ -72,7 +91,6 @@ export function useLive() {
       const status = await check(true);
       if (!status) return;
       if (!status.capture.ready) {
-        if (status.capture.permission !== 'required') setError(status.capture.detail);
         return;
       }
       setState('starting'); setLatest(null);
@@ -85,9 +103,11 @@ export function useLive() {
     actionPending.current = true;
     setRequestingPermission(true); setPermissionAttempted(true); setPermissionIssue(''); setError('');
     try {
-      const capture = await window.kotonoha.requestCapturePermission();
-      setReadiness((previous) => previous ? { ...previous, capture } : previous);
-      if (capture.permission === 'unknown' || capture.permission === undefined) setPermissionIssue('permissionRequestFailed');
+      const result = await window.kotonoha.requestCapturePermission();
+      if ('error' in result) { showServiceFailure(result.error); return; }
+      setServiceFailure(null);
+      setCapture(result);
+      if (result.permission === 'unknown' || result.permission === undefined) setPermissionIssue('permissionRequestFailed');
     } catch { setPermissionIssue('permissionRequestFailed'); }
     finally { actionPending.current = false; setRequestingPermission(false); }
   }
@@ -99,6 +119,6 @@ export function useLive() {
     setState('stopping');
     try { await window.kotonoha?.stop(); } catch (error) { setError(String(error)); setState('stopped'); }
   }
-  return { settings, save, state, latest, history, visible, locked, error: window.kotonoha ? error : labels(settings.uiLanguage).desktopRequired, setError, message, partial, readiness, checking, initialized, check, start, stop, permissionOpen, setPermissionOpen, permissionAttempted, requestingPermission, permissionIssue, openPermissionGuide, requestCapturePermission, openCaptureSettings };
+  return { settings, save, state, latest, history, visible, locked, error: window.kotonoha ? error : labels(settings.uiLanguage).desktopRequired, setError, message, partial, readiness, capture, serviceFailure, checking, initialized, check, start, stop, permissionOpen, setPermissionOpen, permissionAttempted, requestingPermission, permissionIssue, openPermissionGuide, requestCapturePermission, openCaptureSettings };
 }
 export type Live = ReturnType<typeof useLive>;

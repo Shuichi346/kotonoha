@@ -40,6 +40,7 @@ case "$tool" in
       [[ "$KOTONOHA_CHECK_APP" == "$KOTONOHA_PACKAGE_OUT/kotonoha-darwin-arm64/kotonoha.app" ]]
     fi ;;
   uv) if [[ "$1" == --version ]]; then echo 'uv 0.13.1'; exit "\${TEST_UV_STATUS:-0}"; fi ;;
+  llama-server) echo "\${TEST_LLAMA_VERSION:-version: 1.0.0 (build 12359)}" >&2 ;;
   nemo-speech)
     if [[ "$1" == --version ]]; then echo 'nemo-speech 0.2.0'; else
       echo "Features: asr \${TEST_METAL:-backend_metal} realtime_websocket"
@@ -47,12 +48,13 @@ case "$tool" in
     fi ;;
 esac
 `;
-  for (const name of ['uname', 'sw_vers', 'git', 'xcrun', 'node', 'npm', 'uv', 'nemo-speech']) {
+  for (const name of ['uname', 'sw_vers', 'git', 'xcrun', 'node', 'npm', 'uv', 'nemo-speech', 'llama-server']) {
     writeFileSync(path.join(bin, name), stub, { mode: 0o755 });
   }
   const log = path.join(root, 'commands.log');
   const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, BUILD_TEST_LOG: log, ...overrides };
   delete env.NEMO_SPEECH_BIN;
+  delete env.KOTONOHA_LLAMA_SERVER;
   delete env.KOTONOHA_PACKAGE_OUT;
   if (overrides.KOTONOHA_PACKAGE_OUT) env.KOTONOHA_PACKAGE_OUT = overrides.KOTONOHA_PACKAGE_OUT;
   return {
@@ -71,7 +73,7 @@ test('diagnostics check every requested tool without installing or downloading',
   const result = fixture().run(['--check']);
   assert.equal(result.status, 0, result.stderr);
   for (const command of ['git|--version', 'xcrun|swift --version', 'node|--version', 'npm|--version',
-    'uv|--version', 'nemo-speech|--version', 'nemo-speech|doctor']) assert(result.log.includes(command));
+    'uv|--version', 'llama-server|--version', 'nemo-speech|--version', 'nemo-speech|doctor']) assert(result.log.includes(command));
   assert(!result.log.includes('npm|ci'));
   assert(!result.log.includes('uv|sync'));
 });
@@ -81,6 +83,7 @@ test('unsupported environments stop before setup while completing other diagnost
     { TEST_OS: 'Linux' }, { TEST_ARCH: 'x86_64' }, { TEST_MACOS: '15.6' },
     { TEST_SWIFT_ARCH: 'x86_64' }, { TEST_SDK: '15.5' }, { TEST_NODE: 'v26.4.9' },
     { TEST_NPM: '12.0.0' }, { TEST_NODE: 'v26.5.0-rc.1' }, { TEST_UV_STATUS: '127' },
+    { TEST_LLAMA_VERSION: 'version: 0.9.0' }, { TEST_LLAMA_VERSION: 'unknown' },
     { TEST_METAL: 'no_backend_metal' }, { TEST_DOCTOR_STATUS: '1' }, { TEST_LIPO_STATUS: '1' },
   ];
   for (const values of cases) {

@@ -8,11 +8,15 @@ from pathlib import Path
 from huggingface_hub.constants import HF_HUB_CACHE
 
 ROOT = Path(__file__).resolve().parents[1]
-MODEL_ID = "mlx-community/Hy-MT2-1.8B-4bit"
-MODEL_REVISION = "e5c6fe56c7b3bc77fae5ae92db31f2178f1e6912"
+MODEL_ID = "mradermacher/plamo-3-translate-0.8b-GGUF"
+MODEL_REVISION = "3a3ba78e02c862bc3b136a30625d7157666c827f"
+MODEL_FILENAME = "plamo-3-translate-0.8b.Q8_0.gguf"
+MODEL_SIZE = 948896256
+MODEL_SHA256 = "49b3e9b986c01f9b5feff9d482476fe46b2cebea8369ed8614303a1021ad6f88"
 MODEL_DIR = (
     Path(HF_HUB_CACHE) / f"models--{MODEL_ID.replace('/', '--')}" / "snapshots" / MODEL_REVISION
 )
+MODEL_PATH = MODEL_DIR / MODEL_FILENAME
 ASR_MODEL = "nemotron-3.5"
 ASR_DIR = Path(
     os.environ.get("NEMO_SPEECH_MODEL_DIR", Path.home() / "Library/Caches/NeMoSpeech/models")
@@ -33,19 +37,25 @@ def nemo_binary() -> str | None:
 
 def translation_ready() -> bool:
     try:
-        if not all(
-            (MODEL_DIR / name).is_file()
-            for name in ("config.json", "tokenizer_config.json", "tokenizer.json")
-        ):
-            return False
-        index = MODEL_DIR / "model.safetensors.index.json"
-        if index.is_file():
-            weights = set(json.loads(index.read_text())["weight_map"].values())
-        else:
-            weights = {file.name for file in MODEL_DIR.glob("*.safetensors")}
-        return bool(weights) and all((MODEL_DIR / name).stat().st_size > 0 for name in weights)
-    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        with MODEL_PATH.open("rb") as model:
+            return (
+                MODEL_PATH.stat().st_size == MODEL_SIZE
+                and model.read(4) == b"GGUF"
+                and llama_binary() is not None
+            )
+    except OSError:
         return False
+
+
+def llama_binary() -> str | None:
+    configured = os.environ.get("KOTONOHA_LLAMA_SERVER")
+    if configured:
+        return configured if Path(configured).is_file() else None
+    return shutil.which("llama-server") or (
+        "/opt/homebrew/bin/llama-server"
+        if Path("/opt/homebrew/bin/llama-server").is_file()
+        else None
+    )
 
 
 def asr_ready() -> bool:

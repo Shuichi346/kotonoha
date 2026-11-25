@@ -21,6 +21,10 @@ try {
     }
   }
   desktop = await electron.launch({ executablePath: path.resolve(process.env.KOTONOHA_SMOKE_APP || 'release/kotonoha-darwin-arm64/kotonoha.app/Contents/MacOS/kotonoha'), env, timeout: 15000 });
+  const { version, devDependencies } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.equal(await desktop.evaluate(({ app }) => app.getVersion()), version);
+  const electronVersion = await desktop.evaluate(() => process.versions.electron);
+  assert.equal(electronVersion, devDependencies.electron);
   const errors = [];
   desktop.on('window', (page) => page.on('pageerror', (error) => errors.push(error.message)));
   await desktop.firstWindow();
@@ -66,6 +70,19 @@ try {
     return { focusable: overlay.isFocusable(), visible: overlay.isVisible() };
   });
   assert.deepEqual(inputBefore, { focusable: false, visible: false });
+  await desktop.evaluate(({ Menu }) => {
+    globalThis.smokeMenuRefreshes = 0;
+    const original = Menu.setApplicationMenu;
+    Menu.setApplicationMenu = function (...args) {
+      globalThis.smokeMenuRefreshes++;
+      return original.apply(this, args);
+    };
+  });
+  await controller.evaluate(async () => {
+    const { settings } = await window.kotonoha.snapshot();
+    await Promise.all([32, 34, 30].map((fontSize) => window.kotonoha.settings({ ...settings, fontSize })));
+  });
+  assert.equal(await desktop.evaluate(() => globalThis.smokeMenuRefreshes), 0);
   const result = await controller.evaluate(async () => {
     const before = await window.kotonoha.snapshot();
     const status = await window.kotonoha.status();
@@ -89,6 +106,7 @@ try {
   assert.equal(result.after.settings.uiLanguage, 'en');
   assert.equal(result.after.settings.commitIntervalSeconds, 10);
   assert.equal(result.after.settings.target, result.before.settings.target);
+  assert.equal(await desktop.evaluate(() => globalThis.smokeMenuRefreshes), 1);
   assert.equal(JSON.parse(readFileSync(path.join(profile, 'settings.json'), 'utf8')).uiLanguage, 'en');
   assert.equal(JSON.parse(readFileSync(path.join(profile, 'settings.json'), 'utf8')).commitIntervalSeconds, 10);
   await controller.waitForFunction(() => document.documentElement.lang === 'en');
@@ -99,9 +117,9 @@ try {
   assert.equal(menus[1].label, 'Edit');
   assert.equal(result.status.asr.ready, true);
   assert.equal(result.status.translation.ready, true);
-  assert.equal(result.status.translation.detail, 'Hy-MT2 1.8B · MLX 4-bit');
+  assert.equal(result.status.translation.detail, 'PLaMo 3 Translate 0.8B · GGUF Q8_0');
   // Hidden smoke windows need a rendered model label, not on-screen visibility.
-  await controller.getByText('Hy-MT2 1.8B', { exact: true }).waitFor({ state: 'attached', timeout: 5000 });
+  await controller.getByText('PLaMo 3 Translate 0.8B', { exact: true }).waitFor({ state: 'attached', timeout: 5000 });
   assert.equal(result.after.visible, false);
   assert.equal(result.after.locked, true);
   assert.deepEqual(await desktop.evaluate(({ BrowserWindow }) => ({
@@ -145,7 +163,7 @@ try {
     return { overlayVisible: windows.find((win) => win.isAlwaysOnTop()).isVisible() };
   });
   assert.equal(safety.overlayVisible, false);
-  console.log(JSON.stringify({ passed: true, fallbackPort: fallback ? 8774 : undefined, windows: windows.length, presentation, asr: result.status.asr.ready, translation: result.status.translation.ready, capture: result.status.capture, ipc: 'authenticated backend and independent overlay', rendererErrors: errors.length }));
+  console.log(JSON.stringify({ passed: true, electronVersion, fallbackPort: fallback ? 8774 : undefined, windows: windows.length, presentation, asr: result.status.asr.ready, translation: result.status.translation.ready, capture: result.status.capture, ipc: 'authenticated backend and independent overlay', rendererErrors: errors.length }));
 } finally {
   await desktop?.close();
   await Promise.all(occupied.map((server) => new Promise((resolve) => server.close(resolve))));
